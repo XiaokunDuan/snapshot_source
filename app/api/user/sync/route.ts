@@ -76,7 +76,12 @@ export async function GET(request: NextRequest) {
 
             return NextResponse.json({
                 success: true,
-                user: dbUser
+                user: {
+                    id: dbUser.id,
+                    username: dbUser.username,
+                    avatar_url: dbUser.avatar_url,
+                    coins: dbUser.coins || 0
+                }
             });
 
         } finally {

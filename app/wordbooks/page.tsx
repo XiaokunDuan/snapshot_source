@@ -21,12 +21,6 @@ export default function WordBooksPage() {
     const [newBookName, setNewBookName] = useState('');
     const [newBookDesc, setNewBookDesc] = useState('');
 
-    useEffect(() => {
-        if (isLoaded && isSignedIn) {
-            fetchWordBooks();
-        }
-    }, [isLoaded, isSignedIn]);
-
     const fetchWordBooks = async () => {
         try {
             const res = await fetch('/api/wordbooks');
@@ -38,6 +32,12 @@ export default function WordBooksPage() {
             console.error('Failed to fetch word books:', error);
         }
     };
+
+    useEffect(() => {
+        if (isLoaded && isSignedIn) {
+            fetchWordBooks();
+        }
+    }, [isLoaded, isSignedIn]);
 
     const createWordBook = async () => {
         if (!newBookName.trim()) {

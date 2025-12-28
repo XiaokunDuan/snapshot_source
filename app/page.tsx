@@ -2,13 +2,24 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useUser, UserButton } from '@clerk/nextjs';
+import { useRouter } from 'next/navigation';
+import { useTheme } from 'next-themes';
 import Image from 'next/image';
-import { Camera as CameraIcon, BookOpen, TrendingUp, Gift, CheckCircle2, Circle, Award, User as UserIcon, Calendar, Book, Target, Upload, Home as HomeIcon, BarChart3, Loader2 } from 'lucide-react';
+import { Camera as CameraIcon, BookOpen, TrendingUp, Gift, CheckCircle2, Circle, Award, User as UserIcon, Calendar, Book, Target, Upload, Home as HomeIcon, BarChart3, Loader2, Edit2, Trash2 } from 'lucide-react';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
+import confetti from 'canvas-confetti';
+import { PageTransition, FadeIn } from '@/components/Animation';
+import { AnimatePresence } from 'framer-motion';
+import { ImpactStyle } from '@capacitor/haptics';
+import { Pressable } from '@/components/Pressable';
+import { Skeleton } from '@/components/ui/skeleton';
+import { HomeSkeleton } from '@/components/HomeSkeleton';
+import { useHaptics } from '@/hooks/useHaptics';
 import { Capacitor } from '@capacitor/core';
 import SplashScreen from './components/SplashScreen';
 import ChallengeCard from './components/ChallengeCard';
 import CalendarView from './components/CalendarView';
+import { UploadDrawer } from './components/UploadDrawer';
 
 interface WordResult {
   word: string;
@@ -19,6 +30,7 @@ interface WordResult {
 }
 
 interface HistoryItem extends WordResult {
+  id?: number;
   imageUrl: string;
   timestamp: number;
 }
@@ -36,7 +48,11 @@ type TabType = 'home' | 'history' | 'stats' | 'profile';
 
 export default function Home() {
   const { user, isLoaded, isSignedIn } = useUser();
+  const router = useRouter();
+  const { theme, setTheme } = useTheme();
+  const { impact, notification } = useHaptics();
   const [showSplash, setShowSplash] = useState(true);
+
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [currentImage, setCurrentImage] = useState<string | null>(null);
   const [result, setResult] = useState<WordResult | null>(null);
@@ -51,6 +67,63 @@ export default function Home() {
   const [todayReviewed, setTodayReviewed] = useState(0);
   const [dailyGoal] = useState(10);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [editingItem, setEditingItem] = useState<HistoryItem | null>(null);
+  const [itemToDelete, setItemToDelete] = useState<HistoryItem | null>(null);
+
+  // Profile state
+  const [showAbout, setShowAbout] = useState(false);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [newName, setNewName] = useState('');
+
+  const handleUpdateName = async () => {
+    if (!user || !newName.trim()) return;
+    try {
+      await user.update({
+        firstName: newName,
+      });
+      setIsEditingName(false);
+    } catch (err) {
+      console.error('Failed to update name:', err);
+      alert('更新名字失败，请重试');
+    }
+  };
+
+  const deleteWord = async (item: HistoryItem) => {
+    // Optimistic update
+    const newHistory = history.filter(h => h.timestamp !== item.timestamp);
+    setHistory(newHistory);
+    localStorage.setItem('vocabulary_history', JSON.stringify(newHistory));
+
+    if (item.id) {
+      try {
+        await fetch(`/api/history?id=${item.id}`, { method: 'DELETE' });
+      } catch (err) {
+        console.error('Failed to delete from DB:', err);
+        // Revert on failure (optional, keeping simple for now)
+      }
+    }
+  };
+
+  const saveEdit = async (updatedItem: HistoryItem) => {
+    // Optimistic update
+    const newHistory = history.map(h => h.timestamp === updatedItem.timestamp ? updatedItem : h);
+    setHistory(newHistory);
+    localStorage.setItem('vocabulary_history', JSON.stringify(newHistory));
+    setEditingItem(null);
+
+    if (updatedItem.id) {
+      try {
+        await fetch('/api/history', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedItem),
+        });
+      } catch (err) {
+        console.error('Failed to update DB:', err);
+      }
+    }
+  };
 
   // Challenge system state
   const [challenge, setChallenge] = useState<any>(null);
@@ -69,6 +142,9 @@ export default function Home() {
         .then(res => res.json())
         .then(data => {
           console.log('User synced:', data);
+          if (data.user && data.user.coins !== undefined) {
+            setCoins(data.user.coins);
+          }
         })
         .catch(err => console.error('Failed to sync user:', err));
 
@@ -123,7 +199,27 @@ export default function Home() {
 
     const savedStreak = localStorage.getItem('user_streak');
     if (savedStreak) setStreak(parseInt(savedStreak));
+
+    // Initialize PWA Elements for Camera
+    if (typeof window !== 'undefined' && !window.customElements.get('pwa-camera-modal')) {
+      import('@ionic/pwa-elements/loader').then(({ defineCustomElements }) => {
+        defineCustomElements(window);
+      });
+    }
   }, []);
+
+  if (!isLoaded || showSplash) {
+    return <SplashScreen onFinish={() => setShowSplash(false)} />;
+  }
+
+  // Show skeleton while data is loading but after splash
+  // This condition should ideally check if user data is still loading after Clerk is loaded
+  // For example, if you're fetching additional user data from your backend.
+  // If `user` being null means not signed in, then this skeleton might not be appropriate here.
+  // Assuming `!user` here implies that user data is still being fetched/synced after Clerk is loaded.
+  if (!user && isLoaded) { // Changed condition to reflect user data loading after Clerk is loaded
+    return <HomeSkeleton />;
+  }
 
 
 
@@ -227,7 +323,7 @@ export default function Home() {
 
       if (!analyzeRes.ok) {
         const errorData = await analyzeRes.json();
-        console.error('Analysis error:', errorData);
+        console.error('Analysis error:', JSON.stringify(errorData, null, 2));
         throw new Error(errorData.error || 'Analysis failed');
       }
 
@@ -243,15 +339,26 @@ export default function Home() {
       setResult(wordResult);
       setIsAnalyzing(false);
 
-      // Create check-in for today
+      // Trigger check-in
       if (isSignedIn) {
         fetch('/api/check-ins', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ wordsLearned: 1, timeSpent: 0 })
+          body: JSON.stringify({
+            wordsLearned: 1,
+            timeSpent: 1
+          })
         })
           .then(res => res.json())
           .then(() => {
+            console.log('Check-in successful');
+            notification();
+            confetti({
+              particleCount: 100,
+              spread: 70,
+              origin: { y: 0.6 },
+              zIndex: 9999
+            });
             // Refresh challenge and check-ins
             fetch('/api/challenges')
               .then(res => res.json())
@@ -337,432 +444,665 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
+    <div className="min-h-screen bg-gray-50 dark:bg-wise-dark-bg pb-20 transition-colors duration-300">
       <style jsx global>{`
         @keyframes breathe {
           0%, 100% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.95; transform: scale(0.99); }
+          50% { opacity: 0.98; transform: scale(0.998); }
         }
         .breathe-animation {
-          animation: breathe 3s ease-in-out infinite;
+          animation: breathe 8s ease-in-out infinite;
+        }
+        .image-soften {
+          mix-blend-mode: multiply;
+          filter: contrast(0.85) saturate(0.8) brightness(1.02);
+          mask-image: radial-gradient(circle at center, black 20%, rgba(0,0,0,0.4) 60%, transparent 95%);
+          -webkit-mask-image: radial-gradient(circle at center, black 20%, rgba(0,0,0,0.4) 60%, transparent 95%);
+          transition: opacity 0.5s ease;
         }
         .tab-transition {
           transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         }
       `}</style>
 
-      {/* Main Content - 根据选中的标签页渲染不同内容 */}
-      <main className="max-w-6xl mx-auto px-4 py-6 tab-transition">
-        {/* Home Tab */}
-        {activeTab === 'home' && (
-          <div className="space-y-6 breathe-animation">
-            {/* Header Card */}
-            <div className="bg-white rounded-3xl p-6 shadow-sm">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <img
-                    src="/logo-compact.png"
-                    alt="Snapshot Logo"
-                    className="h-10 w-auto"
-                  />
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="text-right">
-                    <div className="text-3xl font-bold text-lime-500">{stats.today}</div>
-                    <div className="text-xs text-gray-500">今日学习</div>
-                  </div>
-                  {isLoaded && isSignedIn && (
-                    <UserButton
-                      appearance={{
-                        elements: {
-                          avatarBox: "w-12 h-12 rounded-full ring-2 ring-lime-500 ring-offset-2"
-                        }
-                      }}
+      <main className="max-w-6xl mx-auto px-4 py-6">
+        <AnimatePresence mode="wait">
+          {/* Home Tab */}
+          {activeTab === 'home' && (
+            <PageTransition key="home" className="space-y-6">
+              {/* Header Card */}
+              <div className="bg-white dark:bg-wise-card-dark rounded-3xl p-6 shadow-sm transition-colors duration-300">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <img
+                      src="/logo-compact.png"
+                      alt="Snapshot Logo"
+                      className="h-10 w-auto"
                     />
-                  )}
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <div className="text-3xl font-bold text-wise-lime">{stats.today}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">今日学习</div>
+                    </div>
+                    {isLoaded && isSignedIn && (
+                      <UserButton
+                        appearance={{
+                          elements: {
+                            avatarBox: "w-12 h-12 rounded-full ring-2 ring-wise-lime ring-offset-2 dark:ring-offset-wise-card-dark"
+                          }
+                        }}
+                      />
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Challenge Card */}
-            {isLoaded && isSignedIn && challenge && (
-              <ChallengeCard
-                currentStreak={challenge.current_streak || 0}
-                maxStreak={challenge.max_streak || 0}
-                shieldCards={challenge.shield_cards || 0}
-                targetDays={challenge.target_days || 30}
-                onStartLearning={() => {
-                  // Start learning - could navigate to training mode
-                  console.log('Start learning clicked');
-                }}
-              />
-            )}
+              {/* Challenge Card */}
+              {isLoaded && isSignedIn && challenge && (
+                <ChallengeCard
+                  currentStreak={challenge.current_streak || 0}
+                  maxStreak={challenge.max_streak || 0}
+                  shieldCards={challenge.shield_cards || 0}
+                  targetDays={challenge.target_days || 30}
+                  onStartLearning={() => {
+                    router.push('/train/flashcard');
+                  }}
+                />
+              )}
 
-            {/* Calendar View */}
-            {isLoaded && isSignedIn && (
-              <CalendarView checkIns={checkIns} />
-            )}
+              {/* Calendar View */}
+              {isLoaded && isSignedIn && (
+                <CalendarView checkIns={checkIns} />
+              )}
 
-            {!currentImage && !result && (
-              <>
-                {/* Camera Button for Native */}
-                {isNative && (
-                  <button
-                    onClick={takePicture}
-                    className="w-full bg-gradient-to-r from-lime-400 to-lime-500 hover:from-lime-500 hover:to-lime-600 text-white rounded-3xl p-8 text-center cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl"
-                  >
-                    <div className="flex flex-col items-center gap-4">
-                      <div className="p-4 rounded-full bg-white/20">
-                        <CameraIcon className="w-12 h-12 text-white" />
+              {!currentImage && !result && (
+                <>
+                  {/* Camera Button for Native */}
+                  {isNative && (
+                    <button
+                      onClick={takePicture}
+                      className="w-full bg-wise-lime hover:bg-lime-400 text-black rounded-3xl p-8 text-center cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl"
+                    >
+                      <div className="flex flex-col items-center gap-4">
+                        <div className="p-4 rounded-full bg-black/10">
+                          <CameraIcon className="w-12 h-12 text-black" />
+                        </div>
+                        <h2 className="text-2xl font-bold text-black">拍照识别</h2>
+                        <p className="text-black/70">使用相机学习新单词</p>
                       </div>
-                      <h2 className="text-2xl font-bold">拍照识别</h2>
-                      <p className="text-white/90">使用相机学习新单词</p>
-                    </div>
-                  </button>
-                )}
+                    </button>
+                  )}
 
-                {/* Upload Area */}
-                <div
-                  onClick={handleUploadClick}
-                  onDragOver={isNative ? undefined : handleDragOver}
-                  onDragLeave={isNative ? undefined : handleDragLeave}
-                  onDrop={isNative ? undefined : handleDrop}
-                  className={`
+                  {/* Upload Area */}
+                  <UploadDrawer
+                    onCamera={takePicture}
+                    onGallery={() => {
+                      if (isNative) {
+                        pickFromGallery();
+                      } else {
+                        fileInputRef.current?.click();
+                      }
+                    }}
+                    isNative={isNative}
+                  >
+                    <div
+                      onDragOver={isNative ? undefined : handleDragOver}
+                      onDragLeave={isNative ? undefined : handleDragLeave}
+                      onDrop={isNative ? undefined : handleDrop}
+                      className={`
                     relative border-2 border-dashed rounded-3xl p-12 text-center cursor-pointer
                     transition-all duration-300 ease-in-out bg-white
                     ${isDragging
-                      ? 'border-lime-500 bg-lime-50/50 scale-[1.02]'
-                      : 'border-gray-200 hover:bg-lime-50/30 hover:border-lime-400'
-                    }
+                          ? 'border-lime-500 bg-lime-50/50 scale-[1.02]'
+                          : 'border-gray-200 hover:bg-lime-50/30 hover:border-lime-400'
+                        }
                   `}
-                >
-                  {!isNative && (
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*"
-                      onChange={handleFileSelect}
-                      className="hidden"
-                    />
-                  )}
+                    >
+                      {!isNative && (
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handleFileSelect}
+                          className="hidden"
+                        />
+                      )}
 
-                  <div className="flex flex-col items-center gap-4">
-                    <img
-                      src="/learning.png"
-                      alt="Learning"
-                      className="w-32 h-32 opacity-90"
-                    />
+                      <div className="flex flex-col items-center gap-4">
+                        <img
+                          src="/learning.png"
+                          alt="Learning"
+                          className="w-32 h-32 opacity-90 image-soften"
+                        />
+                        <div>
+                          <h2 className="text-xl font-bold text-gray-900 mb-2">
+                            {isNative ? '从相册选择' : (isDragging ? '松开上传' : '上传图片')}
+                          </h2>
+                          <p className="text-gray-600 text-sm">
+                            {isNative ? '选择图片开始识别' : '支持 PNG, JPG, WEBP'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </UploadDrawer>
+
+                  {/* Info Cards */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-white dark:bg-wise-card-dark rounded-3xl p-6 shadow-sm transition-colors duration-300">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="p-2 bg-lime-100 dark:bg-lime-900/30 rounded-xl">
+                          <TrendingUp className="w-5 h-5 text-wise-lime" />
+                        </div>
+                        <span className="text-sm font-medium text-gray-600 dark:text-gray-400">本周学习</span>
+                      </div>
+                      <div className="text-2xl font-bold text-gray-900 dark:text-white">{stats.thisWeek}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">个单词</div>
+                    </div>
+                    <div className="bg-white dark:bg-wise-card-dark rounded-3xl p-6 shadow-sm transition-colors duration-300">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl">
+                          <Award className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                        </div>
+                        <span className="text-sm font-medium text-gray-600 dark:text-gray-400">累计学习</span>
+                      </div>
+                      <div className="text-2xl font-bold text-gray-900 dark:text-white">{stats.total}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">个单词</div>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Loading */}
+              {(isUploading || isAnalyzing) && (
+                <div className="bg-white dark:bg-wise-card-dark rounded-3xl p-12 text-center shadow-sm">
+                  <div className="flex flex-col items-center gap-6">
+                    <div className="relative">
+                      <Loader2 className="w-16 h-16 text-wise-lime animate-spin" />
+                      <div className="absolute inset-0 bg-wise-lime rounded-full blur-xl opacity-20 animate-pulse" />
+                    </div>
                     <div>
-                      <h2 className="text-xl font-bold text-gray-900 mb-2">
-                        {isNative ? '从相册选择' : (isDragging ? '松开上传' : '上传图片')}
-                      </h2>
-                      <p className="text-gray-600 text-sm">
-                        {isNative ? '选择图片开始识别' : '支持 PNG, JPG, WEBP'}
+                      <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                        {isUploading ? '加载中...' : 'AI 识别中...'}
+                      </h3>
+                      <p className="text-gray-600 dark:text-gray-400 text-sm">
+                        {isUploading ? '请稍候' : '正在分析图片内容'}
                       </p>
                     </div>
                   </div>
                 </div>
+              )}
 
-                {/* Info Cards */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-white rounded-3xl p-6 shadow-sm">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="p-2 bg-lime-100 rounded-xl">
-                        <TrendingUp className="w-5 h-5 text-lime-600" />
-                      </div>
-                      <span className="text-sm font-medium text-gray-600">本周学习</span>
-                    </div>
-                    <div className="text-2xl font-bold text-gray-900">{stats.thisWeek}</div>
-                    <div className="text-xs text-gray-500 mt-1">个单词</div>
+              {/* Result */}
+              {result && currentImage && !isUploading && !isAnalyzing && (
+                <div className="space-y-4">
+                  <div className="bg-white rounded-3xl overflow-hidden shadow-sm">
+                    <img
+                      src={currentImage}
+                      alt="Uploaded"
+                      className="w-full h-64 object-cover"
+                    />
                   </div>
-                  <div className="bg-white rounded-3xl p-6 shadow-sm">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="p-2 bg-emerald-100 rounded-xl">
-                        <Award className="w-5 h-5 text-emerald-600" />
+
+                  <div className="bg-gradient-to-br from-lime-50 to-emerald-50 rounded-3xl p-8 shadow-sm">
+                    <div className="text-center space-y-5">
+                      <div>
+                        <h2 className="text-5xl font-bold text-gray-900 mb-2">
+                          {result.word}
+                        </h2>
+                        <p className="text-xl text-lime-600 font-mono">
+                          {result.phonetic}
+                        </p>
                       </div>
-                      <span className="text-sm font-medium text-gray-600">累计学习</span>
+
+                      <div className="inline-block px-6 py-3 bg-lime-500 rounded-full">
+                        <p className="text-lg font-medium text-white">
+                          {result.meaning}
+                        </p>
+                      </div>
+
+                      <div className="w-16 h-1 bg-lime-400 rounded-full mx-auto" />
+
+                      <div className="bg-white rounded-2xl p-6">
+                        <p className="text-base text-gray-900 italic mb-2">
+                          "{result.sentence}"
+                        </p>
+                        <p className="text-sm text-gray-600">
+                          {result.sentence_cn}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setCurrentImage(null);
+                          setResult(null);
+                        }}
+                        className="w-full px-6 py-4 bg-gray-900 hover:bg-gray-800 text-white rounded-full font-semibold transition-all shadow-md hover:shadow-lg"
+                      >
+                        继续学习
+                      </button>
                     </div>
-                    <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
-                    <div className="text-xs text-gray-500 mt-1">个单词</div>
                   </div>
                 </div>
-              </>
-            )}
+              )}
+            </PageTransition>
+          )}
 
-            {/* Loading */}
-            {(isUploading || isAnalyzing) && (
-              <div className="bg-white rounded-3xl p-12 text-center shadow-sm">
-                <div className="flex flex-col items-center gap-6">
-                  <div className="relative">
-                    <Loader2 className="w-16 h-16 text-lime-500 animate-spin" />
-                    <div className="absolute inset-0 bg-lime-500 rounded-full blur-xl opacity-20 animate-pulse" />
+          {/* Edit Modal */}
+          {activeTab === 'history' && editingItem && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+              <div className="bg-white dark:bg-wise-card-dark rounded-3xl p-6 w-full max-w-md shadow-xl transition-colors duration-300">
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">编辑单词</h3>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">单词</label>
+                    <input
+                      value={editingItem.word}
+                      onChange={e => setEditingItem({ ...editingItem, word: e.target.value })}
+                      className="w-full p-3 rounded-xl bg-gray-50 dark:bg-black/20 text-gray-900 dark:text-white border-0 focus:ring-2 focus:ring-wise-lime transition-all"
+                    />
                   </div>
                   <div>
-                    <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                      {isUploading ? '加载中...' : 'AI 识别中...'}
-                    </h3>
-                    <p className="text-gray-600 text-sm">
-                      {isUploading ? '请稍候' : '正在分析图片内容'}
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">音标</label>
+                    <input
+                      value={editingItem.phonetic}
+                      onChange={e => setEditingItem({ ...editingItem, phonetic: e.target.value })}
+                      className="w-full p-3 rounded-xl bg-gray-50 dark:bg-black/20 text-gray-900 dark:text-white border-0 focus:ring-2 focus:ring-wise-lime transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">释义</label>
+                    <input
+                      value={editingItem.meaning}
+                      onChange={e => setEditingItem({ ...editingItem, meaning: e.target.value })}
+                      className="w-full p-3 rounded-xl bg-gray-50 dark:bg-black/20 text-gray-900 dark:text-white border-0 focus:ring-2 focus:ring-wise-lime transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">例句</label>
+                    <textarea
+                      value={editingItem.sentence}
+                      onChange={e => setEditingItem({ ...editingItem, sentence: e.target.value })}
+                      rows={2}
+                      className="w-full p-3 rounded-xl bg-gray-50 dark:bg-black/20 text-gray-900 dark:text-white border-0 focus:ring-2 focus:ring-wise-lime transition-all resize-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">例句翻译</label>
+                    <textarea
+                      value={editingItem.sentence_cn}
+                      onChange={e => setEditingItem({ ...editingItem, sentence_cn: e.target.value })}
+                      rows={2}
+                      className="w-full p-3 rounded-xl bg-gray-50 dark:bg-black/20 text-gray-900 dark:text-white border-0 focus:ring-2 focus:ring-wise-lime transition-all resize-none"
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-3 mt-6">
+                  <button
+                    onClick={() => setEditingItem(null)}
+                    className="flex-1 py-3 px-4 bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-300 rounded-xl font-medium"
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={() => saveEdit(editingItem)}
+                    className="flex-1 py-3 px-4 bg-wise-lime text-black rounded-xl font-bold"
+                  >
+                    保存
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Delete Confirmation Modal */}
+          {activeTab === 'history' && itemToDelete && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setItemToDelete(null)}>
+              <div className="bg-white dark:bg-wise-card-dark rounded-3xl p-6 w-full max-w-sm shadow-xl transition-colors duration-300" onClick={e => e.stopPropagation()}>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">确认删除</h3>
+                <p className="text-gray-500 dark:text-gray-400 mb-6">确定要删除单词 "{itemToDelete.word}" 吗？此操作无法撤销。</p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setItemToDelete(null)}
+                    className="flex-1 py-3 px-4 bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-300 rounded-xl font-medium"
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={() => {
+                      deleteWord(itemToDelete);
+                      setItemToDelete(null);
+                    }}
+                    className="flex-1 py-3 px-4 bg-red-500 text-white rounded-xl font-bold hover:bg-red-600 transition-colors"
+                  >
+                    删除
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* History Tab */}
+          {activeTab === 'history' && (
+            <PageTransition key="history" className="space-y-6">
+              <div className="bg-white dark:bg-wise-card-dark rounded-3xl p-6 shadow-sm transition-colors duration-300">
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">学习记录</h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400">{history.length} 个单词</p>
+              </div>
+
+              {history.length > 0 ? (
+                <div className="grid grid-cols-2 gap-4">
+                  {history.map((item, index) => (
+                    <div
+                      key={item.id || item.timestamp}
+                      className="group relative bg-white dark:bg-wise-card-dark rounded-3xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300"
+                    >
+                      <img
+                        src={item.imageUrl}
+                        alt={item.word}
+                        onClick={() => {
+                          setActiveTab('home');
+                          setCurrentImage(item.imageUrl);
+                          setResult(item);
+                        }}
+                        className="w-full h-32 object-cover cursor-pointer"
+                      />
+                      <div className="p-4">
+                        <div className="flex justify-between items-start mb-2">
+                          <p
+                            onClick={() => {
+                              setActiveTab('home');
+                              setCurrentImage(item.imageUrl);
+                              setResult(item);
+                            }}
+                            className="font-bold text-gray-900 dark:text-white text-lg cursor-pointer truncate mr-2"
+                          >
+                            {item.word}
+                          </p>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingItem(item);
+                              }}
+                              className="w-8 h-8 flex items-center justify-center rounded-full bg-wise-lime text-black shadow-sm hover:scale-105 transition-transform"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setItemToDelete(item);
+                              }}
+                              className="w-8 h-8 flex items-center justify-center rounded-full bg-white dark:bg-gray-700 text-red-500 shadow-sm border border-gray-100 dark:border-gray-600 hover:scale-105 transition-transform"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                        <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-1">{item.meaning}</p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
+                          {new Date(item.timestamp).toLocaleDateString('zh-CN')}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-white dark:bg-wise-card-dark rounded-3xl p-12 text-center transition-colors duration-300">
+                  <img
+                    src="/empty-state.png"
+                    alt="Empty State"
+                    className="w-48 h-48 mx-auto mb-6 opacity-80 image-soften"
+                  />
+                  <p className="text-gray-500 dark:text-gray-400">还没有学习记录</p>
+                  <p className="text-gray-400 dark:text-gray-500 text-sm mt-2">拍照识别开始学习吧</p>
+                </div>
+              )}
+            </PageTransition>
+          )}
+
+          {/* Stats Tab */}
+          {activeTab === 'stats' && (
+            <PageTransition key="stats" className="space-y-6">
+              <div className="bg-white rounded-3xl p-6 shadow-sm">
+                <h2 className="text-2xl font-bold text-gray-900 mb-1">学习统计</h2>
+                <p className="text-sm text-gray-500">你的进步一目了然</p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="bg-gradient-to-br from-lime-50 to-emerald-50 rounded-3xl p-8 shadow-sm overflow-hidden relative">
+                  <img
+                    src="/progress.png"
+                    alt="Progress"
+                    className="absolute right-0 top-0 w-40 h-40 opacity-30 image-soften"
+                  />
+                  <div className="text-center relative z-10">
+                    <div className="text-6xl font-bold text-lime-600 mb-2">{stats.total}</div>
+                    <div className="text-lg text-gray-700 font-medium">累计学习单词</div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-white rounded-3xl p-6 shadow-sm">
+                    <div className="text-center">
+                      <div className="text-3xl font-bold text-gray-900 mb-2">{stats.today}</div>
+                      <div className="text-sm text-gray-600">今日学习</div>
+                    </div>
+                  </div>
+                  <div className="bg-white rounded-3xl p-6 shadow-sm">
+                    <div className="text-center">
+                      <div className="text-3xl font-bold text-gray-900 mb-2">{stats.thisWeek}</div>
+                      <div className="text-sm text-gray-600">本周学习</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-3xl p-6 shadow-sm">
+                  <h3 className="font-semibold text-gray-900 mb-4">学习趋势</h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">日均学习</span>
+                      <span className="text-lg font-bold text-gray-900">
+                        {stats.total > 0 ? Math.round(stats.total / 7) : 0}
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-100 rounded-full h-2">
+                      <div
+                        className="bg-lime-500 h-2 rounded-full transition-all"
+                        style={{ width: `${Math.min((stats.today / 10) * 100, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </PageTransition>
+          )}
+
+          {/* Name Edit Modal */}
+          {activeTab === 'profile' && isEditingName && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+              <div className="bg-white dark:bg-wise-card-dark rounded-3xl p-6 w-full max-w-sm shadow-xl transition-colors duration-300">
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">修改昵称</h3>
+                <input
+                  value={newName}
+                  onChange={e => setNewName(e.target.value)}
+                  placeholder="输入新名字"
+                  className="w-full p-3 mb-6 rounded-xl bg-gray-50 dark:bg-black/20 text-gray-900 dark:text-white border-0 focus:ring-2 focus:ring-wise-lime transition-all"
+                />
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setIsEditingName(false)}
+                    className="flex-1 py-3 px-4 bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-300 rounded-xl font-medium"
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={handleUpdateName}
+                    className="flex-1 py-3 px-4 bg-wise-lime text-black rounded-xl font-bold"
+                  >
+                    保存
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* About Modal */}
+          {activeTab === 'profile' && showAbout && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setShowAbout(false)}>
+              <div className="bg-white dark:bg-wise-card-dark rounded-3xl p-8 w-full max-w-sm shadow-xl text-center transition-colors duration-300" onClick={e => e.stopPropagation()}>
+                <img src="/apple-icon.png" alt="Logo" className="w-20 h-20 mx-auto mb-4 rounded-2xl shadow-md" />
+                <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Snapshot</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Version 1.0.0</p>
+                <div className="text-left text-sm text-gray-600 dark:text-gray-300 space-y-2 mb-8 bg-gray-50 dark:bg-black/20 p-4 rounded-xl">
+                  <p>📸 拍照识别单词</p>
+                  <p>🧠 AI 智能解析</p>
+                  <p>📊 学习进度追踪</p>
+                  <p>🎨 Wise 风格设计</p>
+                </div>
+                <button
+                  onClick={() => setShowAbout(false)}
+                  className="w-full py-3 px-4 bg-gray-900 dark:bg-white text-white dark:text-black rounded-xl font-bold"
+                >
+                  关闭
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Profile Tab */}
+          {activeTab === 'profile' && (
+            <PageTransition key="profile" className="space-y-6">
+              <div className="bg-white dark:bg-wise-card-dark rounded-3xl p-6 shadow-sm transition-colors duration-300">
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="relative">
+                    {user?.imageUrl ? (
+                      <img src={user.imageUrl} alt="Profile" className="w-16 h-16 rounded-full object-cover ring-4 ring-gray-50 dark:ring-black/20" />
+                    ) : (
+                      <div className="w-16 h-16 bg-wise-lime rounded-full flex items-center justify-center text-black">
+                        <UserIcon className="w-8 h-8" />
+                      </div>
+                    )}
+                    <button
+                      onClick={() => {
+                        setNewName(user?.firstName || '');
+                        setIsEditingName(true);
+                      }}
+                      className="absolute -bottom-1 -right-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-white p-1.5 rounded-full shadow-md hover:scale-110 transition-transform"
+                    >
+                      <div className="w-3 h-3">✏️</div>
+                    </button>
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                      {user?.firstName || user?.fullName || '学习者'}
+                    </h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {user?.primaryEmailAddress?.emailAddress || '持续进步中'}
                     </p>
                   </div>
                 </div>
-              </div>
-            )}
 
-            {/* Result */}
-            {result && currentImage && !isUploading && !isAnalyzing && (
-              <div className="space-y-4">
-                <div className="bg-white rounded-3xl overflow-hidden shadow-sm">
-                  <img
-                    src={currentImage}
-                    alt="Uploaded"
-                    className="w-full h-64 object-cover"
-                  />
-                </div>
-
-                <div className="bg-gradient-to-br from-lime-50 to-emerald-50 rounded-3xl p-8 shadow-sm">
-                  <div className="text-center space-y-5">
-                    <div>
-                      <h2 className="text-5xl font-bold text-gray-900 mb-2">
-                        {result.word}
-                      </h2>
-                      <p className="text-xl text-lime-600 font-mono">
-                        {result.phonetic}
-                      </p>
-                    </div>
-
-                    <div className="inline-block px-6 py-3 bg-lime-500 rounded-full">
-                      <p className="text-lg font-medium text-white">
-                        {result.meaning}
-                      </p>
-                    </div>
-
-                    <div className="w-16 h-1 bg-lime-400 rounded-full mx-auto" />
-
-                    <div className="bg-white rounded-2xl p-6">
-                      <p className="text-base text-gray-900 italic mb-2">
-                        "{result.sentence}"
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        {result.sentence_cn}
-                      </p>
-                    </div>
+                <div className="grid grid-cols-3 gap-4 p-4 bg-gray-50 dark:bg-black/20 rounded-2xl">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-gray-900 dark:text-white">{stats.total}</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">总词汇</div>
                   </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-gray-900 dark:text-white">{stats.thisWeek}</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">本周</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-gray-900 dark:text-white">{stats.today}</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">今日</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {/* Learning Reminder Removed */}
+
+                <div className="bg-white dark:bg-wise-card-dark rounded-3xl p-5 shadow-sm flex items-center justify-between transition-colors duration-300">
+                  <span className="text-gray-900 dark:text-white font-medium">深色模式</span>
+                  <button
+                    onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                    className={`w-11 h-6 rounded-full transition-colors relative ${theme === 'dark' ? 'bg-wise-lime' : 'bg-gray-200'}`}
+                  >
+                    <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-all ${theme === 'dark' ? 'left-6' : 'left-1'}`}></div>
+                  </button>
                 </div>
 
                 <button
-                  onClick={() => {
-                    setCurrentImage(null);
-                    setResult(null);
-                  }}
-                  className="w-full px-6 py-4 bg-gray-900 hover:bg-gray-800 text-white rounded-full font-semibold transition-all shadow-md hover:shadow-lg"
+                  onClick={() => setShowAbout(true)}
+                  className="w-full bg-white dark:bg-wise-card-dark rounded-3xl p-5 shadow-sm flex items-center justify-between transition-colors duration-300 hover:bg-gray-50 dark:hover:bg-white/5"
                 >
-                  继续学习
+                  <span className="text-gray-900 dark:text-white font-medium">关于应用</span>
+                  <span className="text-gray-400">{"›"}</span>
                 </button>
               </div>
-            )}
-          </div>
-        )}
 
-        {/* History Tab */}
-        {activeTab === 'history' && (
-          <div className="space-y-6 breathe-animation">
-            <div className="bg-white rounded-3xl p-6 shadow-sm">
-              <h2 className="text-2xl font-bold text-gray-900 mb-1">学习记录</h2>
-              <p className="text-sm text-gray-500">{history.length} 个单词</p>
-            </div>
-
-            {history.length > 0 ? (
-              <div className="grid grid-cols-2 gap-4">
-                {history.map((item, index) => (
-                  <div
-                    key={index}
-                    onClick={() => {
-                      setActiveTab('home');
-                      setCurrentImage(item.imageUrl);
-                      setResult(item);
-                    }}
-                    className="bg-white rounded-3xl overflow-hidden shadow-sm hover:shadow-md transition-all cursor-pointer"
-                  >
-                    <img
-                      src={item.imageUrl}
-                      alt={item.word}
-                      className="w-full h-32 object-cover"
-                    />
-                    <div className="p-4">
-                      <p className="font-bold text-gray-900 text-lg">{item.word}</p>
-                      <p className="text-xs text-gray-600 mt-1">{item.meaning}</p>
-                      <p className="text-xs text-gray-400 mt-2">
-                        {new Date(item.timestamp).toLocaleDateString('zh-CN')}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="bg-white rounded-3xl p-12 text-center">
-                <img
-                  src="/empty-state.png"
-                  alt="Empty State"
-                  className="w-48 h-48 mx-auto mb-6 opacity-80"
-                />
-                <p className="text-gray-500">还没有学习记录</p>
-                <p className="text-gray-400 text-sm mt-2">拍照识别开始学习吧</p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Stats Tab */}
-        {activeTab === 'stats' && (
-          <div className="space-y-6 breathe-animation">
-            <div className="bg-white rounded-3xl p-6 shadow-sm">
-              <h2 className="text-2xl font-bold text-gray-900 mb-1">学习统计</h2>
-              <p className="text-sm text-gray-500">你的进步一目了然</p>
-            </div>
-
-            <div className="space-y-4">
-              <div className="bg-gradient-to-br from-lime-50 to-emerald-50 rounded-3xl p-8 shadow-sm overflow-hidden relative">
-                <img
-                  src="/progress.png"
-                  alt="Progress"
-                  className="absolute right-0 top-0 w-40 h-40 opacity-30"
-                />
-                <div className="text-center relative z-10">
-                  <div className="text-6xl font-bold text-lime-600 mb-2">{stats.total}</div>
-                  <div className="text-lg text-gray-700 font-medium">累计学习单词</div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-white rounded-3xl p-6 shadow-sm">
-                  <div className="text-center">
-                    <div className="text-3xl font-bold text-gray-900 mb-2">{stats.today}</div>
-                    <div className="text-sm text-gray-600">今日学习</div>
-                  </div>
-                </div>
-                <div className="bg-white rounded-3xl p-6 shadow-sm">
-                  <div className="text-center">
-                    <div className="text-3xl font-bold text-gray-900 mb-2">{stats.thisWeek}</div>
-                    <div className="text-sm text-gray-600">本周学习</div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-3xl p-6 shadow-sm">
-                <h3 className="font-semibold text-gray-900 mb-4">学习趋势</h3>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">日均学习</span>
-                    <span className="text-lg font-bold text-gray-900">
-                      {stats.total > 0 ? Math.round(stats.total / 7) : 0}
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-100 rounded-full h-2">
-                    <div
-                      className="bg-lime-500 h-2 rounded-full transition-all"
-                      style={{ width: `${Math.min((stats.today / 10) * 100, 100)}%` }}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Profile Tab */}
-        {activeTab === 'profile' && (
-          <div className="space-y-6 breathe-animation">
-            <div className="bg-white rounded-3xl p-6 shadow-sm">
-              <div className="flex items-center gap-4 mb-6">
-                <div className="w-16 h-16 bg-gradient-to-br from-lime-400 to-emerald-500 rounded-full flex items-center justify-center">
-                  <UserIcon className="w-8 h-8 text-white" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900">学习者</h2>
-                  <p className="text-sm text-gray-500">持续进步中</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-4 p-4 bg-gray-50 rounded-2xl">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
-                  <div className="text-xs text-gray-500 mt-1">总词汇</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-gray-900">{stats.thisWeek}</div>
-                  <div className="text-xs text-gray-500 mt-1">本周</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-gray-900">{stats.today}</div>
-                  <div className="text-xs text-gray-500 mt-1">今日</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <div className="bg-white rounded-3xl p-5 shadow-sm flex items-center justify-between">
-                <span className="text-gray-900 font-medium">学习提醒</span>
-                <div className="w-11 h-6 bg-gray-200 rounded-full"></div>
-              </div>
-              <div className="bg-white rounded-3xl p-5 shadow-sm flex items-center justify-between">
-                <span className="text-gray-900 font-medium">深色模式</span>
-                <div className="w-11 h-6 bg-gray-200 rounded-full"></div>
-              </div>
-              <div className="bg-white rounded-3xl p-5 shadow-sm flex items-center justify-between">
-                <span className="text-gray-900 font-medium">关于应用</span>
-                <span className="text-gray-400">›</span>
-              </div>
-            </div>
-          </div>
-        )}
+            </PageTransition>
+          )}
+        </AnimatePresence>
       </main>
 
       {/* Bottom Navigation - Wise Style */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 safe-area-inset-bottom">
+      <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-wise-card-dark border-t border-gray-200 dark:border-white/5 safe-area-inset-bottom transition-colors duration-300">
         <div className="max-w-6xl mx-auto px-4">
           <div className="flex items-center justify-around py-3">
             <button
-              onClick={() => setActiveTab('home')}
+              onClick={() => {
+                setActiveTab('home');
+                impact(ImpactStyle.Light);
+              }}
               className={`flex flex-col items-center gap-1 px-6 py-2 rounded-2xl transition-all ${activeTab === 'home'
-                ? 'text-lime-600'
-                : 'text-gray-400 hover:text-gray-600'
+                ? 'text-wise-lime'
+                : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
                 }`}
             >
-              <HomeIcon className={`w-6 h-6 ${activeTab === 'home' ? 'fill-lime-600' : ''}`} />
+              <HomeIcon className={`w-6 h-6 ${activeTab === 'home' ? 'fill-wise-lime' : ''}`} />
               <span className="text-xs font-medium">主页</span>
             </button>
 
             <button
-              onClick={() => setActiveTab('history')}
+              onClick={() => {
+                setActiveTab('history');
+                impact(ImpactStyle.Light);
+              }}
               className={`flex flex-col items-center gap-1 px-6 py-2 rounded-2xl transition-all ${activeTab === 'history'
-                ? 'text-lime-600'
-                : 'text-gray-400 hover:text-gray-600'
+                ? 'text-wise-lime'
+                : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
                 }`}
             >
-              <BookOpen className={`w-6 h-6 ${activeTab === 'history' ? 'fill-lime-600' : ''}`} />
+              <BookOpen className={`w-6 h-6 ${activeTab === 'history' ? 'fill-wise-lime' : ''}`} />
               <span className="text-xs font-medium">记录</span>
             </button>
 
             <button
-              onClick={() => setActiveTab('stats')}
+              onClick={() => {
+                setActiveTab('stats');
+                impact(ImpactStyle.Light);
+              }}
               className={`flex flex-col items-center gap-1 px-6 py-2 rounded-2xl transition-all ${activeTab === 'stats'
-                ? 'text-lime-600'
-                : 'text-gray-400 hover:text-gray-600'
+                ? 'text-wise-lime'
+                : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
                 }`}
             >
-              <BarChart3 className={`w-6 h-6 ${activeTab === 'stats' ? 'fill-lime-600' : ''}`} />
+              <BarChart3 className={`w-6 h-6 ${activeTab === 'stats' ? 'fill-wise-lime' : ''}`} />
               <span className="text-xs font-medium">统计</span>
             </button>
 
             <button
-              onClick={() => setActiveTab('profile')}
+              onClick={() => {
+                setActiveTab('profile');
+                impact(ImpactStyle.Light);
+              }}
               className={`flex flex-col items-center gap-1 px-6 py-2 rounded-2xl transition-all ${activeTab === 'profile'
-                ? 'text-lime-600'
-                : 'text-gray-400 hover:text-gray-600'
+                ? 'text-wise-lime'
+                : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
                 }`}
             >
-              <UserIcon className={`w-6 h-6 ${activeTab === 'profile' ? 'fill-lime-600' : ''}`} />
+              <UserIcon className={`w-6 h-6 ${activeTab === 'profile' ? 'fill-wise-lime' : ''}`} />
               <span className="text-xs font-medium">我的</span>
             </button>
           </div>

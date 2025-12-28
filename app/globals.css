@@ -3,24 +3,30 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --wise-lime: #9FE870;
+  --wise-dark-bg: #0E1217; /* Deep Navy/Black */
+  --wise-card-dark: #1C232B; /* Slightly lighter navy for cards */
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-wise-lime: var(--wise-lime);
+  --color-wise-dark-bg: var(--wise-dark-bg);
+  --color-wise-card-dark: var(--wise-card-dark);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Class-based dark mode for next-themes */
+.dark {
+  --background: var(--wise-dark-bg);
+  --foreground: #ededed;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }

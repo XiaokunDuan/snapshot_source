@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getEnrichedWordData } from '@/lib/mcp/tools';
+import { fetchWithKeyRotation } from '@/lib/gemini';
 
 interface AnalyzeRequest {
     imageUrl: string;
@@ -12,9 +14,6 @@ interface WordResult {
     sentence_cn: string;
 }
 
-// 全局计数器用于轮询
-let requestCounter = 0;
-
 export async function POST(req: NextRequest) {
     try {
         const body: AnalyzeRequest = await req.json();
@@ -27,38 +26,9 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // 从环境变量获取 API 密钥池
-        const apiKeyPool = process.env.GEMINI_API_KEY_POOL;
-
-        if (!apiKeyPool) {
-            return NextResponse.json(
-                { error: 'GEMINI_API_KEY_POOL not configured' },
-                { status: 500 }
-            );
-        }
-
-        // 分割并处理 API 密钥池
-        const apiKeys = apiKeyPool.split(',').map(key => key.trim()).filter(key => key.length > 0);
-
-        if (apiKeys.length === 0) {
-            return NextResponse.json(
-                { error: 'No valid API keys found' },
-                { status: 500 }
-            );
-        }
-
-        // 轮询选择 API 密钥（按顺序依次使用）
-        const currentIndex = requestCounter % apiKeys.length;
-        const selectedApiKey = apiKeys[currentIndex];
-
-        // 递增计数器
-        requestCounter++;
-
-        console.log(`[Analyze] 🔄 轮询使用密钥 ${currentIndex + 1}/${apiKeys.length} (总请求数: ${requestCounter})`);
-
         // 构建 Gemini API 请求
         const model = 'gemini-3-flash-preview';
-        const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${selectedApiKey}`;
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
         // 系统提示词
         const systemPrompt = `你是一个专业的英语老师。用户会发给你一张图片。请识别图片中的核心物体，返回一个对应的英文单词、音标、中文释义，以及一个简短的英文例句（带中文翻译）。
@@ -106,30 +76,17 @@ export async function POST(req: NextRequest) {
             },
         };
 
-        // 调用 Gemini API
-        const response = await fetch(geminiApiUrl, {
+        // 调用 Gemini API via utility (handles key rotation)
+        const { data } = await fetchWithKeyRotation(endpoint, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(requestBody),
+            body: requestBody,
         });
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            console.error('[Analyze] Gemini API error:', errorData);
-            return NextResponse.json(
-                { error: 'Gemini API request failed', details: errorData },
-                { status: response.status }
-            );
-        }
-
-        const data = await response.json();
 
         // 提取生成的文本
         const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
         if (!generatedText) {
+            console.error('[Analyze] No text generated:', data);
             return NextResponse.json(
                 { error: 'No response from Gemini' },
                 { status: 500 }
@@ -150,9 +107,13 @@ export async function POST(req: NextRequest) {
 
         console.log(`[Analyze] Successfully analyzed: ${result.word}`);
 
+        // 使用 MCP 获取富化数据
+        const enrichedData = await getEnrichedWordData(result.word);
+
         return NextResponse.json({
             success: true,
             ...result,
+            mcp: enrichedData
         });
 
     } catch (error) {

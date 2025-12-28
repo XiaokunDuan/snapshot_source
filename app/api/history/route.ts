@@ -118,7 +118,8 @@ export async function DELETE(req: NextRequest) {
             );
         }
 
-        const id = req.nextUrl.searchParams.get('id');
+        const { searchParams } = new URL(req.url);
+        const id = searchParams.get('id');
 
         if (!id) {
             return NextResponse.json(
@@ -138,6 +139,54 @@ export async function DELETE(req: NextRequest) {
         console.error('[History] DELETE error:', error);
         return NextResponse.json(
             { error: 'Failed to delete word', details: error instanceof Error ? error.message : 'Unknown error' },
+            { status: 500 }
+        );
+    }
+}
+
+// PUT - 更新单词
+export async function PUT(req: NextRequest) {
+    try {
+        const databaseUrl = process.env.DATABASE_URL;
+
+        if (!databaseUrl) {
+            return NextResponse.json(
+                { error: 'DATABASE_URL not configured' },
+                { status: 500 }
+            );
+        }
+
+        const body = await req.json();
+        const { id, word, phonetic, meaning, sentence, sentence_cn } = body;
+
+        if (!id) {
+            return NextResponse.json(
+                { error: 'id is required' },
+                { status: 400 }
+            );
+        }
+
+        const sql = neon(databaseUrl);
+
+        const result = await sql`
+            UPDATE vocabulary_history 
+            SET 
+                word = ${word},
+                phonetic = ${phonetic || ''},
+                meaning = ${meaning},
+                sentence = ${sentence || ''},
+                sentence_cn = ${sentence_cn || ''}
+            WHERE id = ${id}
+            RETURNING *
+        `;
+
+        console.log('[History] Updated word:', id);
+
+        return NextResponse.json(result[0]);
+    } catch (error) {
+        console.error('[History] PUT error:', error);
+        return NextResponse.json(
+            { error: 'Failed to update word', details: error instanceof Error ? error.message : 'Unknown error' },
             { status: 500 }
         );
     }

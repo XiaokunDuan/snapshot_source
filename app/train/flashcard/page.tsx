@@ -12,6 +12,13 @@ interface WordCard {
     sentence_cn: string;
 }
 
+// Sample words - in production, fetch from API
+const SAMPLE_WORDS: WordCard[] = [
+    { word: 'swear', phonetic: '/swer/', meaning: '发誓；咒骂', sentence: 'I swear I will never lie to you.', sentence_cn: '我发誓我永远不会对你撒谎。' },
+    { word: 'achieve', phonetic: '/əˈtʃiːv/', meaning: '实现；达到', sentence: 'She achieved her goal of becoming a doctor.', sentence_cn: '她实现了成为医生的目标。' },
+    { word: 'inspire', phonetic: '/ɪnˈspaɪər/', meaning: '鼓舞；激发', sentence: 'Her story inspired me to work harder.', sentence_cn: '她的故事激励我更加努力工作。' },
+];
+
 export default function FlashcardTraining() {
     const router = useRouter();
     const [currentCard, setCurrentCard] = useState<WordCard | null>(null);
@@ -20,19 +27,12 @@ export default function FlashcardTraining() {
     const [knownCount, setKnownCount] = useState(0);
     const [unknownCount, setUnknownCount] = useState(0);
 
-    // Sample words - in production, fetch from API
-    const sampleWords: WordCard[] = [
-        { word: 'swear', phonetic: '/swer/', meaning: '发誓；咒骂', sentence: 'I swear I will never lie to you.', sentence_cn: '我发誓我永远不会对你撒谎。' },
-        { word: 'achieve', phonetic: '/əˈtʃiːv/', meaning: '实现；达到', sentence: 'She achieved her goal of becoming a doctor.', sentence_cn: '她实现了成为医生的目标。' },
-        { word: 'inspire', phonetic: '/ɪnˈspaɪər/', meaning: '鼓舞；激发', sentence: 'Her story inspired me to work harder.', sentence_cn: '她的故事激励我更加努力工作。' },
-    ];
-
     useEffect(() => {
-        setCurrentCard(sampleWords[cardIndex]);
+        setCurrentCard(SAMPLE_WORDS[cardIndex]);
     }, [cardIndex]);
 
     const handleKnown = () => {
-    setKnown Count(prev => prev + 1);
+        setKnownCount(prev => prev + 1);
         nextCard();
     };
 
@@ -42,7 +42,7 @@ export default function FlashcardTraining() {
     };
 
     const nextCard = () => {
-        if (cardIndex < sampleWords.length - 1) {
+        if (cardIndex < SAMPLE_WORDS.length - 1) {
             setCardIndex(prev => prev + 1);
         } else {
             // Training completed
@@ -100,7 +100,7 @@ export default function FlashcardTraining() {
                         </p>
                         <div className="text-left bg-gray-50 rounded-2xl p-4">
                             <p className="text-gray-900 italic mb-2">
-                                "{currentCard.sentence}"
+                                &quot;{currentCard.sentence}&quot;
                             </p>
                             <p className="text-gray-600 text-sm">
                                 {currentCard.sentence_cn}

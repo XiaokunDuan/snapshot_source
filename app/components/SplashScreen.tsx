@@ -3,57 +3,35 @@
 import { useState, useEffect } from 'react';
 
 export default function SplashScreen({ onFinish }: { onFinish: () => void }) {
-    const [progress, setProgress] = useState(0);
+    const [isVisible, setIsVisible] = useState(true);
 
     useEffect(() => {
-        // 模拟加载进度
-        const interval = setInterval(() => {
-            setProgress(prev => {
-                if (prev >= 100) {
-                    clearInterval(interval);
-                    setTimeout(onFinish, 300);
-                    return 100;
-                }
-                return prev + 10;
-            });
-        }, 100);
+        // Just a short delay to show the solid color then fade out
+        const timer = setTimeout(() => {
+            setIsVisible(false);
+            setTimeout(onFinish, 500); // Wait for fade animation
+        }, 800);
 
-        return () => clearInterval(interval);
+        return () => clearTimeout(timer);
     }, [onFinish]);
 
     return (
-        <div className="fixed inset-0 bg-white flex flex-col items-center justify-center">
-            <style jsx>{`
-        @keyframes pulse-logo {
-          0%, 100% { transform: scale(1); opacity: 1; }
-          50% { transform: scale(1.05); opacity: 0.9; }
-        }
-        .logo-animate {
-          animation: pulse-logo 2s ease-in-out infinite;
-        }
-      `}</style>
-
-            {/* Logo */}
-            <div className="logo-animate mb-8">
-                <svg width="120" height="120" viewBox="0 0 120 120" fill="none">
-                    {/* 简化版蓝色方块 logo */}
-                    <rect x="20" y="20" width="30" height="80" fill="#0066FF" />
-                    <rect x="55" y="20" width="30" height="80" fill="#0066FF" />
-                    <rect x="90" y="20" width="10" height="80" fill="#0066FF" />
-                    <line x1="20" y1="60" x2="100" y2="60" stroke="white" strokeWidth="4" />
-                </svg>
-            </div>
-
-            {/* Loading Bar */}
-            <div className="w-48 h-1 bg-gray-200 rounded-full overflow-hidden">
-                <div
-                    className="h-full bg-blue-600 transition-all duration-300 ease-out"
-                    style={{ width: `${progress}%` }}
-                />
+        <div
+            className={`fixed inset-0 z-[9999] flex items-center justify-center transition-opacity duration-500 ease-in-out ${
+                isVisible ? 'opacity-100' : 'opacity-0'
+            }`}
+            style={{ backgroundColor: '#9FE870' }}
+        >
+            <div className="flex flex-col items-center">
+                {/* Minimal logo or just the color */}
+                <div className="w-16 h-16 bg-black rounded-2xl flex items-center justify-center mb-4">
+                     <span className="text-[#9FE870] font-bold text-2xl">S</span>
+                </div>
+                <h1 className="text-black font-bold text-xl tracking-tight">Snapshot</h1>
             </div>
 
             {/* Copyright */}
-            <p className="absolute bottom-12 text-xs text-gray-400">
+            <p className="absolute bottom-12 text-xs text-black/40">
                 Copyright©2024 Snapshot. All Rights Reserved.
             </p>
         </div>
