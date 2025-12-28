@@ -7,7 +7,7 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 // GET: Fetch words in a specific word book
 export async function GET(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
         const authResult = await auth();
@@ -17,7 +17,8 @@ export async function GET(
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const bookId = params.id;
+        const { id } = await params;
+        const bookId = id;
         const client = await pool.connect();
 
         try {
@@ -74,7 +75,7 @@ export async function GET(
 // POST: Add word to word book
 export async function POST(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
         const authResult = await auth();
@@ -84,7 +85,8 @@ export async function POST(
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const bookId = params.id;
+        const { id } = await params;
+        const bookId = id;
         const { word, phonetic, meaning, sentence, sentence_cn, image_url } = await request.json();
 
         if (!word) {
@@ -165,7 +167,7 @@ export async function POST(
 // DELETE: Remove word from word book
 export async function DELETE(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
         const authResult = await auth();
@@ -175,7 +177,8 @@ export async function DELETE(
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const bookId = params.id;
+        const { id } = await params;
+        const bookId = id;
         const { searchParams } = new URL(request.url);
         const wordId = searchParams.get('wordId');
 

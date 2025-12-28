@@ -16,7 +16,7 @@ export default function SignInPage() {
                 </div>
 
                 <SignIn
-                    localization={zhCN}
+
                     appearance={{
                         elements: {
                             rootBox: "mx-auto",

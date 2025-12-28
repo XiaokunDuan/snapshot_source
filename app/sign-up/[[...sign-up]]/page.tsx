@@ -16,7 +16,7 @@ export default function SignUpPage() {
                 </div>
 
                 <SignUp
-                    localization={zhCN}
+
                     appearance={{
                         elements: {
                             rootBox: "mx-auto",
