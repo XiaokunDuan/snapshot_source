@@ -6,9 +6,9 @@ const config: CapacitorConfig = {
     webDir: 'out',
     server: {
         androidScheme: 'https',
-        url: 'http://10.0.2.2:3000', // Points to dev server from Android Emulator
+        url: 'http://100.76.196.59:3000', // LAN IP for physical device
         cleartext: true,
-        allowNavigation: ['10.0.2.2']
+        allowNavigation: ['*']
     },
     plugins: {
         Camera: {
