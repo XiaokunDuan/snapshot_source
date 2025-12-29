@@ -27,6 +27,8 @@ export default function SignUpPage() {
                             formButtonPrimary: "rounded-2xl bg-lime-500 hover:bg-lime-600 text-white",
                             formFieldInput: "rounded-2xl border-gray-200 focus:border-lime-500 focus:ring-lime-500",
                             footerActionLink: "text-lime-600 hover:text-lime-700",
+                            footer: "hidden",
+                            badge: "hidden"
                         }
                     }}
                 />

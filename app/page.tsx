@@ -252,7 +252,8 @@ export default function Home() {
   const takePicture = async () => {
     try {
       const image = await Camera.getPhoto({
-        quality: 90,
+        quality: 60,
+        width: 1024,
         allowEditing: false,
         resultType: CameraResultType.DataUrl,
         source: CameraSource.Camera

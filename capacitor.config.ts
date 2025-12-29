@@ -6,7 +6,7 @@ const config: CapacitorConfig = {
     webDir: 'out',
     server: {
         androidScheme: 'https',
-        url: 'http://100.76.196.59:3000', // LAN IP for physical device
+        url: 'http://localhost:3000', // Route via USB ADB Reverse
         cleartext: true,
         allowNavigation: ['*']
     },
