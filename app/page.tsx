@@ -357,13 +357,8 @@ export default function Home() {
     }
 
     try {
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        const base64Image = e.target?.result as string;
-        await analyzeImage(base64Image);
-      };
-
-      reader.readAsDataURL(file);
+      const optimizedImage = await optimizeImageForAnalysis(file);
+      await analyzeImage(optimizedImage);
     } catch (error) {
       console.error('Error:', error);
       alert('Failed to process image. Please try again.');
@@ -499,6 +494,43 @@ export default function Home() {
       setIsAnalyzing(false);
     }
   };
+
+  const optimizeImageForAnalysis = async (file: File) => {
+    const dataUrl = await readFileAsDataUrl(file);
+    const image = await loadImage(dataUrl);
+    const maxDimension = 1280;
+    const scale = Math.min(1, maxDimension / Math.max(image.width, image.height));
+    const width = Math.max(1, Math.round(image.width * scale));
+    const height = Math.max(1, Math.round(image.height * scale));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      throw new Error('Failed to prepare image');
+    }
+
+    ctx.drawImage(image, 0, 0, width, height);
+    return canvas.toDataURL('image/jpeg', 0.82);
+  };
+
+  const readFileAsDataUrl = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsDataURL(file);
+    });
+
+  const loadImage = (src: string) =>
+    new Promise<HTMLImageElement>((resolve, reject) => {
+      const image = new window.Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error('Failed to load image'));
+      image.src = src;
+    });
 
   const handleUploadClick = () => {
     if (isNative) {

@@ -7,6 +7,14 @@ export interface GeminiRequestOptions {
     body?: Record<string, unknown>;
 }
 
+function tryParseJson(text: string) {
+    try {
+        return JSON.parse(text);
+    } catch {
+        return null;
+    }
+}
+
 function toErrorMessage(error: unknown) {
     if (error instanceof Error) {
         return error.message;
@@ -90,10 +98,23 @@ export async function fetchWithKeyRotation(
                 body: options.body ? JSON.stringify(options.body) : undefined,
             });
 
-            const data = await response.json();
+            const rawText = await response.text();
+            const data = tryParseJson(rawText);
 
             if (response.ok) {
                 // If it's a Gemini error hidden in a 200 (though rare for status codes)
+                if (!data) {
+                    lastError = {
+                        status: response.status,
+                        details: {
+                            error: {
+                                message: rawText.slice(0, 500) || 'Gemini returned a non-JSON success response',
+                            },
+                        },
+                    };
+                    continue;
+                }
+
                 if (data.error) {
                     console.error(`[Gemini] Key ${currentIndex + 1} returned error:`, data.error.message);
                     lastError = data.error;
@@ -111,16 +132,21 @@ export async function fetchWithKeyRotation(
             // 403: Suspended/Permission denied
             // 429: Rate limit
             // 500/503: Server error (sometimes key specific or temporary)
-            console.warn(`[Gemini] Key ${currentIndex + 1} failed with status ${response.status}:`, data.error?.message || 'Unknown error');
+            const errorMessage = data?.error?.message || rawText || 'Unknown error';
+            console.warn(`[Gemini] Key ${currentIndex + 1} failed with status ${response.status}:`, errorMessage);
 
             lastError = {
                 status: response.status,
-                details: data
+                details: data ?? {
+                    error: {
+                        message: errorMessage,
+                    },
+                }
             };
 
             // If it's a "suspended" or "rate limit" error, definitely try another key
-            const errorMessage = data.error?.message || '';
-            const isSuspended = errorMessage.includes('suspended') || errorMessage.includes('CONSUMER_SUSPENDED');
+            const retryMessage = data?.error?.message || rawText || '';
+            const isSuspended = retryMessage.includes('suspended') || retryMessage.includes('CONSUMER_SUSPENDED');
             const isRateLimit = response.status === 429;
 
             if (isSuspended || isRateLimit || response.status >= 500) {
