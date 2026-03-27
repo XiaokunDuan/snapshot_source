@@ -13,7 +13,6 @@ import { AnimatePresence } from 'framer-motion';
 import { ImpactStyle } from '@capacitor/haptics';
 import { Pressable } from '@/components/Pressable';
 import { Skeleton } from '@/components/ui/skeleton';
-import { HomeSkeleton } from '@/components/HomeSkeleton';
 import { useHaptics } from '@/hooks/useHaptics';
 import { Capacitor } from '@capacitor/core';
 import SplashScreen from './components/SplashScreen';
@@ -84,6 +83,16 @@ function readHistoryCache() {
     console.error('Failed to load history cache:', error);
     return [];
   }
+}
+
+function isWordResult(value: unknown): value is WordResult {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  const requiredFields: (keyof WordResult)[] = ['word', 'phonetic', 'meaning', 'sentence', 'sentence_cn'];
+  return requiredFields.every((field) => typeof candidate[field] === 'string' && candidate[field]!.toString().trim().length > 0);
 }
 
 interface DailyTask {
@@ -195,55 +204,81 @@ export default function Home() {
   // Sync user data with database when logged in
   useEffect(() => {
     if (isLoaded && isSignedIn) {
-      fetch('/api/user/sync')
-        .then(res => res.json())
-        .then(data => {
+      const currentMonth = new Date().toISOString().slice(0, 7);
+
+      void (async () => {
+        try {
+          const syncRes = await fetch('/api/user/sync');
+          if (!syncRes.ok) {
+            throw new Error(`User sync failed with status ${syncRes.status}`);
+          }
+
+          const data = await syncRes.json();
           console.log('User synced:', data);
           if (data.user && data.user.coins !== undefined) {
             setCoins(data.user.coins);
           }
-        })
-        .catch(err => console.error('Failed to sync user:', err));
 
-      // Fetch challenge data
-      fetch('/api/challenges')
-        .then(res => res.json())
-        .then(data => {
-          if (data.challenge) {
-            setChallenge(data.challenge);
-          }
-        })
-        .catch(err => console.error('Failed to fetch challenge:', err));
+          const [challengeRes, checkInsRes, historyRes] = await Promise.allSettled([
+            fetch('/api/challenges'),
+            fetch(`/api/check-ins?month=${currentMonth}`),
+            fetch('/api/history'),
+          ]);
 
-      // Fetch check-ins for current month
-      const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
-      fetch(`/api/check-ins?month=${currentMonth}`)
-        .then(res => res.json())
-        .then(data => {
-          if (data.checkIns) {
-            setCheckIns(data.checkIns);
-          }
-        })
-        .catch(err => console.error('Failed to fetch check-ins:', err));
-
-      fetch('/api/history')
-        .then(async res => {
-          if (!res.ok) {
-            throw new Error('Failed to fetch history');
+          if (challengeRes.status === 'fulfilled') {
+            if (challengeRes.value.ok) {
+              const challengeData = await challengeRes.value.json();
+              if (challengeData.challenge) {
+                setChallenge(challengeData.challenge);
+              }
+            } else {
+              console.error(`Failed to fetch challenge: ${challengeRes.value.status}`);
+            }
+          } else {
+            console.error('Failed to fetch challenge:', challengeRes.reason);
           }
 
-          const data: HistoryApiItem[] = await res.json();
-          const normalized = data.map(normalizeHistoryItem);
-          setHistory(normalized);
-          setTodayStudied(getTodayWordCount(normalized));
-          persistHistoryCache(normalized);
-        })
-        .catch(err => {
-          console.error('Failed to fetch remote history:', err);
+          if (checkInsRes.status === 'fulfilled') {
+            if (checkInsRes.value.ok) {
+              const checkInData = await checkInsRes.value.json();
+              if (Array.isArray(checkInData.checkIns)) {
+                setCheckIns(checkInData.checkIns);
+              }
+            } else {
+              console.error(`Failed to fetch check-ins: ${checkInsRes.value.status}`);
+              setCheckIns([]);
+            }
+          } else {
+            console.error('Failed to fetch check-ins:', checkInsRes.reason);
+            setCheckIns([]);
+          }
+
+          if (historyRes.status === 'fulfilled') {
+            if (historyRes.value.ok) {
+              const historyData: HistoryApiItem[] = await historyRes.value.json();
+              const normalized = historyData.map(normalizeHistoryItem);
+              setHistory(normalized);
+              setTodayStudied(getTodayWordCount(normalized));
+              persistHistoryCache(normalized);
+            } else {
+              console.error(`Failed to fetch history: ${historyRes.value.status}`);
+              const cachedHistory = readHistoryCache();
+              setHistory(cachedHistory);
+              setTodayStudied(getTodayWordCount(cachedHistory));
+            }
+          } else {
+            console.error('Failed to fetch remote history:', historyRes.reason);
+            const cachedHistory = readHistoryCache();
+            setHistory(cachedHistory);
+            setTodayStudied(getTodayWordCount(cachedHistory));
+          }
+        } catch (err) {
+          console.error('Failed to sync user or initialize dashboard:', err);
           const cachedHistory = readHistoryCache();
           setHistory(cachedHistory);
           setTodayStudied(getTodayWordCount(cachedHistory));
-        });
+        }
+      })();
     } else if (isLoaded) {
       const cachedHistory = readHistoryCache();
       setHistory(cachedHistory);
@@ -272,15 +307,6 @@ export default function Home() {
 
   if (!isLoaded || showSplash) {
     return <SplashScreen onFinish={() => setShowSplash(false)} />;
-  }
-
-  // Show skeleton while data is loading but after splash
-  // This condition should ideally check if user data is still loading after Clerk is loaded
-  // For example, if you're fetching additional user data from your backend.
-  // If `user` being null means not signed in, then this skeleton might not be appropriate here.
-  // Assuming `!user` here implies that user data is still being fetched/synced after Clerk is loaded.
-  if (!user && isLoaded) { // Changed condition to reflect user data loading after Clerk is loaded
-    return <HomeSkeleton />;
   }
 
 
@@ -386,6 +412,10 @@ export default function Home() {
       }
 
       const analyzeData = await analyzeRes.json();
+      if (!isWordResult(analyzeData)) {
+        throw new Error('AI returned an incomplete result');
+      }
+
       const wordResult: WordResult = {
         word: analyzeData.word,
         phonetic: analyzeData.phonetic,
@@ -407,7 +437,13 @@ export default function Home() {
             timeSpent: 1
           })
         })
-          .then(res => res.json())
+          .then(async res => {
+            if (!res.ok) {
+              throw new Error(`Check-in failed with status ${res.status}`);
+            }
+
+            return res.json();
+          })
           .then(() => {
             console.log('Check-in successful');
             notification();
@@ -419,13 +455,35 @@ export default function Home() {
             });
             // Refresh challenge and check-ins
             fetch('/api/challenges')
-              .then(res => res.json())
-              .then(data => setChallenge(data.challenge));
+              .then(async res => {
+                if (!res.ok) {
+                  throw new Error(`Challenge refresh failed with status ${res.status}`);
+                }
+
+                return res.json();
+              })
+              .then(data => {
+                if (data.challenge) {
+                  setChallenge(data.challenge);
+                }
+              })
+              .catch(err => console.error('Failed to refresh challenge:', err));
 
             const currentMonth = new Date().toISOString().slice(0, 7);
             fetch(`/api/check-ins?month=${currentMonth}`)
-              .then(res => res.json())
-              .then(data => setCheckIns(data.checkIns));
+              .then(async res => {
+                if (!res.ok) {
+                  throw new Error(`Check-in refresh failed with status ${res.status}`);
+                }
+
+                return res.json();
+              })
+              .then(data => {
+                if (Array.isArray(data.checkIns)) {
+                  setCheckIns(data.checkIns);
+                }
+              })
+              .catch(err => console.error('Failed to refresh check-ins:', err));
           })
           .catch(err => console.error('Failed to create check-in:', err));
       }

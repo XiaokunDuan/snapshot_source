@@ -3,6 +3,7 @@ import { auth } from '@clerk/nextjs/server';
 import { Pool } from '@neondatabase/serverless';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const MONTH_PATTERN = /^\d{4}-\d{2}$/;
 
 // GET: Fetch user's check-in records
 export async function GET(request: NextRequest) {
@@ -16,6 +17,10 @@ export async function GET(request: NextRequest) {
 
         const { searchParams } = new URL(request.url);
         const month = searchParams.get('month'); // Format: YYYY-MM
+
+        if (month && !MONTH_PATTERN.test(month)) {
+            return NextResponse.json({ error: 'month must be in YYYY-MM format' }, { status: 400 });
+        }
 
         const client = await pool.connect();
 
@@ -34,7 +39,7 @@ export async function GET(request: NextRequest) {
 
             // Build query based on month filter
             let query = 'SELECT * FROM check_ins WHERE user_id = $1';
-            const params = [dbUserId];
+            const params: Array<number | string> = [dbUserId];
 
             if (month) {
                 query += ` AND check_in_date >= $2 AND check_in_date < $3`;
@@ -96,37 +101,22 @@ export async function POST(request: NextRequest) {
             }
 
             const dbUserId = userResult.rows[0].id;
+            await client.query('BEGIN');
 
             // Get today's date
             const today = new Date().toISOString().split('T')[0];
 
-            // Check if already checked in today
-            const existingCheckIn = await client.query(
-                'SELECT * FROM check_ins WHERE user_id = $1 AND check_in_date = $2',
-                [dbUserId, today]
+            let checkIn;
+            const createdCheckIn = await client.query(
+                `INSERT INTO check_ins (user_id, check_in_date, words_learned, time_spent, created_at)
+                 VALUES ($1, $2, $3, $4, NOW())
+                 ON CONFLICT (user_id, check_in_date) DO NOTHING
+                 RETURNING *`,
+                [dbUserId, today, wordsLearned, timeSpent]
             );
 
-            let checkIn;
-
-            if (existingCheckIn.rows.length > 0) {
-                // Update existing check-in
-                checkIn = await client.query(
-                    `UPDATE check_ins 
-           SET words_learned = words_learned + $1, 
-               time_spent = time_spent + $2
-           WHERE user_id = $3 AND check_in_date = $4
-           RETURNING *`,
-                    [wordsLearned, timeSpent, dbUserId, today]
-                );
-            } else {
-                // Create new check-in
-                checkIn = await client.query(
-                    `INSERT INTO check_ins (user_id, check_in_date, words_learned, time_spent, created_at)
-           VALUES ($1, $2, $3, $4, NOW())
-           RETURNING *`,
-                    [dbUserId, today, wordsLearned, timeSpent]
-                );
-
+            if (createdCheckIn.rows.length > 0) {
+                checkIn = createdCheckIn;
                 // Calculate streak
                 const yesterday = new Date();
                 yesterday.setDate(yesterday.getDate() - 1);
@@ -157,13 +147,27 @@ export async function POST(request: NextRequest) {
                         [dbUserId]
                     );
                 }
+            } else {
+                checkIn = await client.query(
+                    `UPDATE check_ins
+                     SET words_learned = words_learned + $1,
+                         time_spent = time_spent + $2
+                     WHERE user_id = $3 AND check_in_date = $4
+                     RETURNING *`,
+                    [wordsLearned, timeSpent, dbUserId, today]
+                );
             }
+
+            await client.query('COMMIT');
 
             return NextResponse.json({
                 success: true,
                 checkIn: checkIn.rows[0]
             });
 
+        } catch (error) {
+            await client.query('ROLLBACK');
+            throw error;
         } finally {
             client.release();
         }

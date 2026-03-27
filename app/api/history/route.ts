@@ -1,17 +1,39 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { auth } from '@clerk/nextjs/server';
 import {
     createHistoryRecord,
     deleteHistoryRecord,
     listHistory,
+    resolveHistoryUserId,
     updateHistoryRecord,
 } from '@/lib/history-store';
 
-export const runtime = 'edge';
+export const runtime = 'nodejs';
+
+async function requireHistoryUser() {
+    const { userId } = await auth();
+
+    if (!userId) {
+        return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
+    }
+
+    const dbUserId = await resolveHistoryUserId(userId);
+    if (!dbUserId) {
+        return { error: NextResponse.json({ error: 'User not found' }, { status: 404 }) };
+    }
+
+    return { dbUserId };
+}
 
 // GET - 获取学习历史
 export async function GET() {
     try {
-        const history = await listHistory();
+        const user = await requireHistoryUser();
+        if (user.error) {
+            return user.error;
+        }
+
+        const history = await listHistory(user.dbUserId);
 
         return NextResponse.json(history);
     } catch (error) {
@@ -26,6 +48,11 @@ export async function GET() {
 // POST - 保存新单词
 export async function POST(req: NextRequest) {
     try {
+        const user = await requireHistoryUser();
+        if (user.error) {
+            return user.error;
+        }
+
         const body = await req.json();
         const { word, phonetic, meaning, sentence, sentence_cn, imageUrl } = body;
 
@@ -36,7 +63,7 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        const result = await createHistoryRecord({
+        const result = await createHistoryRecord(user.dbUserId, {
             word,
             phonetic,
             meaning,
@@ -60,6 +87,11 @@ export async function POST(req: NextRequest) {
 // DELETE - 删除单词
 export async function DELETE(req: NextRequest) {
     try {
+        const user = await requireHistoryUser();
+        if (user.error) {
+            return user.error;
+        }
+
         const { searchParams } = new URL(req.url);
         const id = searchParams.get('id');
 
@@ -70,7 +102,7 @@ export async function DELETE(req: NextRequest) {
             );
         }
 
-        await deleteHistoryRecord(parseInt(id, 10));
+        await deleteHistoryRecord(user.dbUserId, parseInt(id, 10));
 
         console.log('[History] Deleted word:', id);
 
@@ -87,6 +119,11 @@ export async function DELETE(req: NextRequest) {
 // PUT - 更新单词
 export async function PUT(req: NextRequest) {
     try {
+        const user = await requireHistoryUser();
+        if (user.error) {
+            return user.error;
+        }
+
         const body = await req.json();
         const { id, word, phonetic, meaning, sentence, sentence_cn } = body;
 
@@ -97,7 +134,7 @@ export async function PUT(req: NextRequest) {
             );
         }
 
-        const result = await updateHistoryRecord({
+        const result = await updateHistoryRecord(user.dbUserId, {
             id,
             word,
             phonetic,

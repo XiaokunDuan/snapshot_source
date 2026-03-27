@@ -23,7 +23,7 @@ export default function FlashcardTraining() {
     const router = useRouter();
     const [currentCard, setCurrentCard] = useState<WordCard | null>(null);
     const [cardIndex, setCardIndex] = useState(0);
-    const [totalCards] = useState(10);
+    const totalCards = SAMPLE_WORDS.length;
     const [knownCount, setKnownCount] = useState(0);
     const [unknownCount, setUnknownCount] = useState(0);
 
@@ -32,21 +32,22 @@ export default function FlashcardTraining() {
     }, [cardIndex]);
 
     const handleKnown = () => {
-        setKnownCount(prev => prev + 1);
-        nextCard();
+        const nextKnownCount = knownCount + 1;
+        setKnownCount(nextKnownCount);
+        nextCard(nextKnownCount, unknownCount);
     };
 
     const handleUnknown = () => {
-        setUnknownCount(prev => prev + 1);
-        nextCard();
+        const nextUnknownCount = unknownCount + 1;
+        setUnknownCount(nextUnknownCount);
+        nextCard(knownCount, nextUnknownCount);
     };
 
-    const nextCard = () => {
+    const nextCard = (finalKnownCount: number, finalUnknownCount: number) => {
         if (cardIndex < SAMPLE_WORDS.length - 1) {
             setCardIndex(prev => prev + 1);
         } else {
-            // Training completed
-            alert(`训练完成！\n记得: ${knownCount + 1}\n不记得: ${unknownCount + (cardIndex + 1 - knownCount - 1)}`);
+            alert(`训练完成！\n记得: ${finalKnownCount}\n不记得: ${finalUnknownCount}`);
             router.push('/');
         }
     };

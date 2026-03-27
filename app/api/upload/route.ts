@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { randomUUID } from 'crypto';
 
 export async function POST(req: NextRequest) {
     try {
@@ -36,14 +37,6 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // 验证文件类型（只允许图片）
-        if (!file.type.startsWith('image/')) {
-            return NextResponse.json(
-                { error: 'Only image files are allowed' },
-                { status: 400 }
-            );
-        }
-
         const cdnBase = process.env.CDN_PUBLIC_BASE_URL;
         if (!cdnBase) {
             return NextResponse.json(
@@ -52,22 +45,27 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // 生成唯一文件名：timestamp_randomstring.ext
-        const timestamp = Date.now();
-        const randomStr = Math.random().toString(36).substring(2, 15);
-        const extension = file.name.split('.').pop() || 'jpg';
-        const uniqueFilename = `${timestamp}_${randomStr}.${extension}`;
-
         // 将文件转换为 Buffer
         const arrayBuffer = await file.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
+        const detectedMimeType = detectImageMimeType(buffer);
+
+        if (!detectedMimeType) {
+            return NextResponse.json(
+                { error: 'Only supported image files are allowed' },
+                { status: 400 }
+            );
+        }
+
+        const extension = getExtensionFromMimeType(detectedMimeType);
+        const uniqueFilename = `${Date.now()}_${randomUUID()}.${extension}`;
 
         // 上传到 R2
         const uploadCommand = new PutObjectCommand({
             Bucket: 'word-app-images',
             Key: uniqueFilename,
             Body: buffer,
-            ContentType: file.type,
+            ContentType: detectedMimeType,
         });
 
         await s3Client.send(uploadCommand);
@@ -92,5 +90,57 @@ export async function POST(req: NextRequest) {
             },
             { status: 500 }
         );
+    }
+}
+
+function detectImageMimeType(buffer: Buffer) {
+    if (buffer.length >= 8 && buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
+        return 'image/png';
+    }
+
+    if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+        return 'image/jpeg';
+    }
+
+    if (buffer.length >= 12 && buffer.subarray(0, 4).toString('ascii') === 'RIFF' && buffer.subarray(8, 12).toString('ascii') === 'WEBP') {
+        return 'image/webp';
+    }
+
+    if (buffer.length >= 6) {
+        const signature = buffer.subarray(0, 6).toString('ascii');
+        if (signature === 'GIF87a' || signature === 'GIF89a') {
+            return 'image/gif';
+        }
+    }
+
+    if (buffer.length >= 12 && buffer.subarray(4, 8).toString('ascii') === 'ftyp') {
+        const brand = buffer.subarray(8, 12).toString('ascii');
+        if (brand === 'heic' || brand === 'heix' || brand === 'hevc' || brand === 'hevx') {
+            return 'image/heic';
+        }
+        if (brand === 'mif1' || brand === 'msf1') {
+            return 'image/heif';
+        }
+    }
+
+    return null;
+}
+
+function getExtensionFromMimeType(mimeType: string) {
+    switch (mimeType) {
+        case 'image/png':
+            return 'png';
+        case 'image/jpeg':
+            return 'jpg';
+        case 'image/webp':
+            return 'webp';
+        case 'image/gif':
+            return 'gif';
+        case 'image/heic':
+            return 'heic';
+        case 'image/heif':
+            return 'heif';
+        default:
+            return 'img';
     }
 }

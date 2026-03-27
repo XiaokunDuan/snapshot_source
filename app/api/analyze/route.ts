@@ -50,6 +50,14 @@ export async function POST(req: NextRequest) {
             // 提取 base64 数据（去掉 "data:image/...;base64," 前缀）
             imageData = imageUrl.split(',')[1];
         } else {
+            const remoteUrl = validateRemoteImageUrl(imageUrl);
+            if (!remoteUrl.allowed) {
+                return NextResponse.json(
+                    { error: remoteUrl.reason },
+                    { status: 400 }
+                );
+            }
+
             // 从 URL 获取图片
             const fetchedImage = await fetchImageAsBase64(imageUrl);
             imageData = fetchedImage.data;
@@ -109,6 +117,14 @@ export async function POST(req: NextRequest) {
             );
         }
 
+        const validationError = validateWordResult(result);
+        if (validationError) {
+            return NextResponse.json(
+                { error: validationError, raw: result },
+                { status: 500 }
+            );
+        }
+
         console.log(`[Analyze] Successfully analyzed: ${result.word}`);
 
         // 使用 MCP 获取富化数据
@@ -129,6 +145,47 @@ export async function POST(req: NextRequest) {
             },
             { status: 500 }
         );
+    }
+}
+
+function validateWordResult(result: Partial<WordResult>) {
+    const requiredFields: (keyof WordResult)[] = ['word', 'phonetic', 'meaning', 'sentence', 'sentence_cn'];
+
+    for (const field of requiredFields) {
+        const value = result[field];
+        if (typeof value !== 'string' || !value.trim()) {
+            return `AI response is missing required field: ${field}`;
+        }
+    }
+
+    return null;
+}
+
+function validateRemoteImageUrl(imageUrl: string) {
+    try {
+        const parsed = new URL(imageUrl);
+        if (!['http:', 'https:'].includes(parsed.protocol)) {
+            return { allowed: false, reason: 'Only http(s) image URLs are supported' };
+        }
+
+        const allowedHosts = new Set<string>();
+        const cdnBase = process.env.CDN_PUBLIC_BASE_URL;
+
+        if (cdnBase) {
+            try {
+                allowedHosts.add(new URL(cdnBase).host);
+            } catch {
+                console.warn('[Analyze] Invalid CDN_PUBLIC_BASE_URL:', cdnBase);
+            }
+        }
+
+        if (allowedHosts.size > 0 && !allowedHosts.has(parsed.host)) {
+            return { allowed: false, reason: 'Remote image URL is not from an allowed host' };
+        }
+
+        return { allowed: true as const };
+    } catch {
+        return { allowed: false, reason: 'Invalid image URL' };
     }
 }
 

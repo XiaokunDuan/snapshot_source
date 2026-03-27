@@ -99,6 +99,7 @@ async function setupDatabase() {
     await client.query(`
       CREATE TABLE IF NOT EXISTS vocabulary_history (
         id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
         word VARCHAR(100) NOT NULL,
         phonetic VARCHAR(100),
         meaning TEXT NOT NULL,
@@ -110,11 +111,17 @@ async function setupDatabase() {
     `);
 
     await client.query(`
+      ALTER TABLE vocabulary_history
+      ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE CASCADE;
+    `);
+
+    await client.query(`
       CREATE INDEX IF NOT EXISTS idx_users_clerk_id ON users(clerk_user_id);
       CREATE INDEX IF NOT EXISTS idx_check_ins_user_date ON check_ins(user_id, check_in_date);
       CREATE INDEX IF NOT EXISTS idx_saved_words_user_book ON saved_words(user_id, word_book_id);
       CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, is_read);
       CREATE INDEX IF NOT EXISTS idx_vocabulary_history_created_at ON vocabulary_history(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_vocabulary_history_user_created_at ON vocabulary_history(user_id, created_at DESC);
     `);
 
     console.log('Database setup completed successfully.');
