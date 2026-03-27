@@ -44,6 +44,14 @@ export async function POST(req: NextRequest) {
             );
         }
 
+        const cdnBase = process.env.CDN_PUBLIC_BASE_URL;
+        if (!cdnBase) {
+            return NextResponse.json(
+                { error: 'CDN_PUBLIC_BASE_URL is not configured' },
+                { status: 500 }
+            );
+        }
+
         // 生成唯一文件名：timestamp_randomstring.ext
         const timestamp = Date.now();
         const randomStr = Math.random().toString(36).substring(2, 15);
@@ -65,7 +73,7 @@ export async function POST(req: NextRequest) {
         await s3Client.send(uploadCommand);
 
         // 返回自定义域名 URL
-        const publicUrl = `https://snapshot.yulu34.top/${uniqueFilename}`;
+        const publicUrl = `${cdnBase}/${uniqueFilename}`;
 
         console.log(`[Upload] Successfully uploaded: ${uniqueFilename}`);
 
