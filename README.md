@@ -1,45 +1,76 @@
 # Snapshot
 
-Snapshot is a Next.js web app for image-based English vocabulary learning. Users can sign in with Clerk, upload or capture an image, send it to Gemini for word extraction, and save the result into history, check-ins, and word books stored in Neon Postgres.
+Snapshot is an image-first English learning app built with Next.js. Users can upload or capture a picture, let Gemini extract a core English word from the image, and save the result into history, check-ins, notifications, and word books.
+
+Snapshot 是一个“拍图学英语”的应用。用户上传或拍摄图片后，Gemini 会识别图片中的核心对象并生成英文单词、音标、释义和例句，结果会保存到历史记录、打卡、通知和单词本。
+
+## Features
+
+- Image-based vocabulary extraction with Gemini
+- Email and social sign-in with Clerk
+- Neon Postgres for user data, history, challenges, and word books
+- Cloudflare R2 for image hosting
+- MiniMax-compatible text chat API
+- Web-first deployment, with Capacitor config kept for later mobile packaging
+
+## Image Support
+
+- Web upload accepts any browser-readable `image/*` file
+- Typical formats: `PNG`, `JPG`, `JPEG`, `WEBP`, `GIF`, `HEIC/HEIF` when the browser can decode them
+- The web client now compresses uploads before analysis and converts them to JPEG for Gemini requests
+- Native camera/gallery input depends on the device OS and Capacitor camera plugin output
 
 ## Stack
 
 - Next.js 16 App Router
 - React 19
-- Clerk authentication
+- Clerk
 - Neon Postgres
-- Cloudflare R2 for image hosting
-- Gemini for analysis and chat
-- Capacitor is present for mobile packaging, but the current production target is Web
+- Cloudflare R2
+- Gemini
+- OpenAI-compatible text API endpoint
+- Tailwind CSS 4
 
 ## Local Development
 
-1. Install dependencies:
+1. Install dependencies
 
 ```bash
 npm install
 ```
 
-2. Create `.env.local` from `env.example` and fill in all required values.
+2. Copy the environment template
 
-3. Initialize the database schema:
+```bash
+cp env.example .env.local
+```
+
+3. Fill in the required values in `.env.local`
+
+4. Initialize the database
 
 ```bash
 npm run db:setup
 ```
 
-4. Start the app:
+5. Start the app
 
 ```bash
 npm run dev
 ```
 
-5. Open `http://localhost:3000`.
+6. Open `http://localhost:3000`
 
-## Required Environment Variables
+## Environment Variables
+
+Required:
 
 ```bash
 GEMINI_API_KEY_POOL=
+GEMINI_MODEL=gemini-2.5-flash
+TEXT_API_BASE_URL=
+TEXT_API_KEY=
+TEXT_MODEL=
 R2_ACCOUNT_ID=
 R2_ACCESS_KEY_ID=
 R2_SECRET_ACCESS_KEY=
@@ -60,55 +91,39 @@ MCP_WIKI_ENABLED=false
 BRAVE_API_KEY=
 ```
 
-## Database Setup
-
-`npm run db:setup` creates the tables required by the current web app:
-
-- `users`
-- `learning_challenges`
-- `check_ins`
-- `word_books`
-- `saved_words`
-- `notifications`
-- `vocabulary_history`
-
-Legacy scripts are still available:
+## Database Scripts
 
 ```bash
+npm run db:setup
 npm run db:migrate
 npm run db:add-coins
 ```
 
-Use `db:setup` for a fresh environment. The legacy scripts are only for existing environments that were created before the consolidated setup script.
+`db:setup` is the recommended command for a fresh environment.
 
 ## Deployment
 
-The recommended production target is Vercel.
+The current production target is Vercel.
 
-1. Import or link the project to Vercel.
-2. Configure the same environment variables in Vercel Project Settings.
-3. Make sure your Clerk app allows the production domain in its allowed origins and redirect URLs.
-4. Run `npm run db:setup` against the production `DATABASE_URL` before the first release.
-5. Deploy with:
+1. Configure the same environment variables in Vercel
+2. Run `npm run db:setup` against the production database
+3. Make sure Clerk production keys and production domains are configured
+4. Deploy with:
 
 ```bash
 npm run build
 vercel --prod
 ```
 
-## Post-Deploy Verification
+## Open-Source Notes
 
-Verify these flows after deployment:
+- `env.example` contains placeholders only
+- `.env.local`, Clerk local config, editor temp folders, and local agent folders are gitignored
+- The app can be self-hosted, but production auth, storage, database, and AI credentials must be provided by the deployer
 
-- Sign in and sign up work on the production domain.
-- `/api/user/sync` creates a user record and default challenge resources.
-- Uploading an image returns a Gemini result.
-- New history items appear after refresh and across devices for the same account.
-- Word books, notifications, and check-ins load without database errors.
+## Current Notes
 
-## Current Production Notes
-
-- Web is the primary deployment target.
-- `app/api/upload/route.ts` currently uses the hardcoded R2 bucket name `word-app-images`.
-- Home history now prefers the remote `/api/history` source when signed in and falls back to local cache if the request fails.
-- Capacitor config is still present for Android development, but it is not part of the web deployment path.
+- Web is the primary deployment path
+- `/api/upload` still uses the hardcoded R2 bucket name `word-app-images`
+- `/api/history` is still not multi-user safe enough for a public launch and should be hardened before a broader release
+- `middleware.ts` should eventually be migrated to the Next.js `proxy` convention

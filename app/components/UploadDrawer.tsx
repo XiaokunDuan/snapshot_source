@@ -38,9 +38,13 @@ export function UploadDrawer({ children, onCamera, onGallery, isNative }: Upload
                                 </div>
                                 <div className="text-left">
                                     <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">相册</h3>
-                                    <p className="text-sm text-zinc-500 dark:text-zinc-400">{isNative ? '从手机相册选择' : '选择图片文件'}</p>
+                                    <p className="text-sm text-zinc-500 dark:text-zinc-400">{isNative ? '从手机相册选择' : '选择图片文件，常见格式都支持'}</p>
                                 </div>
                             </button>
+
+                            <p className="px-2 text-xs leading-5 text-zinc-400 dark:text-zinc-500">
+                                网页端会优先处理当前浏览器可读取的图片类型，并在分析前自动压缩。
+                            </p>
                         </div>
 
                         <div className="p-4 border-t border-zinc-100 dark:border-white/5 mt-4">

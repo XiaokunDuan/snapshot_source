@@ -689,7 +689,10 @@ export default function Home() {
                             {isNative ? '从相册选择' : (isDragging ? '松开上传' : '上传图片')}
                           </h2>
                           <p className="text-gray-600 text-sm">
-                            {isNative ? '选择图片开始识别' : '支持 PNG, JPG, WEBP'}
+                            {isNative ? '选择图片开始识别' : '支持常见图片格式，上传后会自动压缩后再识别'}
+                          </p>
+                          <p className="text-gray-400 text-xs mt-1">
+                            {isNative ? '以系统相册可选格式为准' : '例如 PNG、JPG、JPEG、WEBP、GIF，以及当前浏览器可读取的 HEIC/HEIF'}
                           </p>
                         </div>
                       </div>
