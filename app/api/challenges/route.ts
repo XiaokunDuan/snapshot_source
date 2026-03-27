@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
             const challengeResult = await client.query(
                 `SELECT * FROM learning_challenges 
          WHERE user_id = $1 AND status = 'active' 
-         ORDER BY created_at DESC LIMIT 1`,
+         ORDER BY started_at DESC LIMIT 1`,
                 [dbUserId]
             );
 
@@ -95,7 +95,7 @@ export async function PATCH(request: NextRequest) {
             const challengeResult = await client.query(
                 `SELECT * FROM learning_challenges 
          WHERE user_id = $1 AND status = 'active' 
-         ORDER BY created_at DESC LIMIT 1`,
+         ORDER BY started_at DESC LIMIT 1`,
                 [dbUserId]
             );
 

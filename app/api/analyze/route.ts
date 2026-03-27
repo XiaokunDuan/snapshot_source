@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
         }
 
         // 构建 Gemini API 请求
-        const model = 'gemini-3-flash-preview';
+        const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
         const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
         // 系统提示词
@@ -44,12 +44,16 @@ export async function POST(req: NextRequest) {
 
         // 处理 base64 或 URL
         let imageData: string;
+        let mimeType = 'image/jpeg';
         if (imageUrl.startsWith('data:')) {
+            mimeType = getMimeTypeFromDataUrl(imageUrl);
             // 提取 base64 数据（去掉 "data:image/...;base64," 前缀）
             imageData = imageUrl.split(',')[1];
         } else {
             // 从 URL 获取图片
-            imageData = await fetchImageAsBase64(imageUrl);
+            const fetchedImage = await fetchImageAsBase64(imageUrl);
+            imageData = fetchedImage.data;
+            mimeType = fetchedImage.mimeType;
         }
 
         const requestBody = {
@@ -60,7 +64,7 @@ export async function POST(req: NextRequest) {
                         { text: systemPrompt },
                         {
                             inline_data: {
-                                mime_type: 'image/jpeg',
+                                mime_type: mimeType,
                                 data: imageData,
                             },
                         },
@@ -121,7 +125,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
             {
                 error: 'Analysis failed',
-                details: error instanceof Error ? error.message : 'Unknown error',
+                details: error instanceof Error ? error.message : JSON.stringify(error),
             },
             { status: 500 }
         );
@@ -129,9 +133,18 @@ export async function POST(req: NextRequest) {
 }
 
 // 辅助函数：将图片 URL 转换为 Base64
-async function fetchImageAsBase64(imageUrl: string): Promise<string> {
+async function fetchImageAsBase64(imageUrl: string): Promise<{ data: string; mimeType: string }> {
     const response = await fetch(imageUrl);
+    const mimeType = response.headers.get('content-type') || 'image/jpeg';
     const arrayBuffer = await response.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-    return buffer.toString('base64');
+    return {
+        data: buffer.toString('base64'),
+        mimeType,
+    };
+}
+
+function getMimeTypeFromDataUrl(dataUrl: string) {
+    const match = dataUrl.match(/^data:([^;]+);base64,/);
+    return match?.[1] || 'image/jpeg';
 }

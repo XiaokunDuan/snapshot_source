@@ -1,42 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { neon } from '@neondatabase/serverless';
+import {
+    createHistoryRecord,
+    deleteHistoryRecord,
+    listHistory,
+    updateHistoryRecord,
+} from '@/lib/history-store';
 
 export const runtime = 'edge';
 
 // GET - 获取学习历史
 export async function GET() {
     try {
-        const databaseUrl = process.env.DATABASE_URL;
-
-        if (!databaseUrl) {
-            return NextResponse.json(
-                { error: 'DATABASE_URL not configured' },
-                { status: 500 }
-            );
-        }
-
-        const sql = neon(databaseUrl);
-
-        // 自动创建表（如果不存在）
-        await sql`
-      CREATE TABLE IF NOT EXISTS vocabulary_history (
-        id SERIAL PRIMARY KEY,
-        word VARCHAR(100) NOT NULL,
-        phonetic VARCHAR(100),
-        meaning TEXT NOT NULL,
-        sentence TEXT,
-        sentence_cn TEXT,
-        image_url TEXT,
-        created_at TIMESTAMP DEFAULT NOW()
-      )
-    `;
-
-        // 获取最近 50 条记录
-        const history = await sql`
-      SELECT * FROM vocabulary_history 
-      ORDER BY created_at DESC 
-      LIMIT 50
-    `;
+        const history = await listHistory();
 
         return NextResponse.json(history);
     } catch (error) {
@@ -51,15 +26,6 @@ export async function GET() {
 // POST - 保存新单词
 export async function POST(req: NextRequest) {
     try {
-        const databaseUrl = process.env.DATABASE_URL;
-
-        if (!databaseUrl) {
-            return NextResponse.json(
-                { error: 'DATABASE_URL not configured' },
-                { status: 500 }
-            );
-        }
-
         const body = await req.json();
         const { word, phonetic, meaning, sentence, sentence_cn, imageUrl } = body;
 
@@ -70,33 +36,18 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        const sql = neon(databaseUrl);
-
-        // 确保表存在
-        await sql`
-      CREATE TABLE IF NOT EXISTS vocabulary_history (
-        id SERIAL PRIMARY KEY,
-        word VARCHAR(100) NOT NULL,
-        phonetic VARCHAR(100),
-        meaning TEXT NOT NULL,
-        sentence TEXT,
-        sentence_cn TEXT,
-        image_url TEXT,
-        created_at TIMESTAMP DEFAULT NOW()
-      )
-    `;
-
-        // 插入新记录
-        const result = await sql`
-      INSERT INTO vocabulary_history 
-      (word, phonetic, meaning, sentence, sentence_cn, image_url)
-      VALUES (${word}, ${phonetic || ''}, ${meaning}, ${sentence || ''}, ${sentence_cn || ''}, ${imageUrl || ''})
-      RETURNING *
-    `;
+        const result = await createHistoryRecord({
+            word,
+            phonetic,
+            meaning,
+            sentence,
+            sentence_cn,
+            imageUrl,
+        });
 
         console.log('[History] Saved word:', word);
 
-        return NextResponse.json(result[0]);
+        return NextResponse.json(result);
     } catch (error) {
         console.error('[History] POST error:', error);
         return NextResponse.json(
@@ -109,15 +60,6 @@ export async function POST(req: NextRequest) {
 // DELETE - 删除单词
 export async function DELETE(req: NextRequest) {
     try {
-        const databaseUrl = process.env.DATABASE_URL;
-
-        if (!databaseUrl) {
-            return NextResponse.json(
-                { error: 'DATABASE_URL not configured' },
-                { status: 500 }
-            );
-        }
-
         const { searchParams } = new URL(req.url);
         const id = searchParams.get('id');
 
@@ -128,9 +70,7 @@ export async function DELETE(req: NextRequest) {
             );
         }
 
-        const sql = neon(databaseUrl);
-
-        await sql`DELETE FROM vocabulary_history WHERE id = ${parseInt(id)}`;
+        await deleteHistoryRecord(parseInt(id, 10));
 
         console.log('[History] Deleted word:', id);
 
@@ -147,15 +87,6 @@ export async function DELETE(req: NextRequest) {
 // PUT - 更新单词
 export async function PUT(req: NextRequest) {
     try {
-        const databaseUrl = process.env.DATABASE_URL;
-
-        if (!databaseUrl) {
-            return NextResponse.json(
-                { error: 'DATABASE_URL not configured' },
-                { status: 500 }
-            );
-        }
-
         const body = await req.json();
         const { id, word, phonetic, meaning, sentence, sentence_cn } = body;
 
@@ -166,23 +97,18 @@ export async function PUT(req: NextRequest) {
             );
         }
 
-        const sql = neon(databaseUrl);
-
-        const result = await sql`
-            UPDATE vocabulary_history 
-            SET 
-                word = ${word},
-                phonetic = ${phonetic || ''},
-                meaning = ${meaning},
-                sentence = ${sentence || ''},
-                sentence_cn = ${sentence_cn || ''}
-            WHERE id = ${id}
-            RETURNING *
-        `;
+        const result = await updateHistoryRecord({
+            id,
+            word,
+            phonetic,
+            meaning,
+            sentence,
+            sentence_cn,
+        });
 
         console.log('[History] Updated word:', id);
 
-        return NextResponse.json(result[0]);
+        return NextResponse.json(result);
     } catch (error) {
         console.error('[History] PUT error:', error);
         return NextResponse.json(

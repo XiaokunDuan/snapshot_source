@@ -23,12 +23,6 @@ export default function NotificationsPage() {
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [unreadCount, setUnreadCount] = useState(0);
 
-    useEffect(() => {
-        if (isLoaded && isSignedIn) {
-            fetchNotifications();
-        }
-    }, [isLoaded, isSignedIn]);
-
     const fetchNotifications = async () => {
         try {
             const res = await fetch('/api/notifications');
@@ -41,6 +35,24 @@ export default function NotificationsPage() {
             console.error('Failed to fetch notifications:', error);
         }
     };
+
+    useEffect(() => {
+        if (!isLoaded || !isSignedIn) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await fetch('/api/notifications');
+                const data = await res.json();
+                if (!cancelled && data.notifications) {
+                    setNotifications(data.notifications);
+                    setUnreadCount(data.unreadCount || 0);
+                }
+            } catch (error) {
+                console.error('Failed to fetch notifications:', error);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [isLoaded, isSignedIn]);
 
     const markAsRead = async (notificationId: number) => {
         try {

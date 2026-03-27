@@ -35,6 +35,57 @@ interface HistoryItem extends WordResult {
   timestamp: number;
 }
 
+interface HistoryApiItem {
+  id: number;
+  word: string;
+  phonetic: string | null;
+  meaning: string;
+  sentence: string | null;
+  sentence_cn: string | null;
+  image_url: string | null;
+  created_at: string;
+}
+
+const HISTORY_CACHE_KEY = 'vocabulary_history';
+
+function persistHistoryCache(items: HistoryItem[]) {
+  localStorage.setItem(HISTORY_CACHE_KEY, JSON.stringify(items));
+}
+
+function normalizeHistoryItem(item: HistoryApiItem): HistoryItem {
+  return {
+    id: item.id,
+    word: item.word,
+    phonetic: item.phonetic || '',
+    meaning: item.meaning,
+    sentence: item.sentence || '',
+    sentence_cn: item.sentence_cn || '',
+    imageUrl: item.image_url || '',
+    timestamp: new Date(item.created_at).getTime(),
+  };
+}
+
+function getTodayWordCount(items: HistoryItem[]) {
+  const today = new Date().setHours(0, 0, 0, 0);
+  return items.filter((item) =>
+    new Date(item.timestamp).setHours(0, 0, 0, 0) === today
+  ).length;
+}
+
+function readHistoryCache() {
+  const savedHistory = localStorage.getItem(HISTORY_CACHE_KEY);
+  if (!savedHistory) {
+    return [];
+  }
+
+  try {
+    return JSON.parse(savedHistory) as HistoryItem[];
+  } catch (error) {
+    console.error('Failed to load history cache:', error);
+    return [];
+  }
+}
+
 interface DailyTask {
   id: string;
   title: string;
@@ -49,7 +100,7 @@ type TabType = 'home' | 'history' | 'stats' | 'profile';
 export default function Home() {
   const { user, isLoaded, isSignedIn } = useUser();
   const router = useRouter();
-  const { theme, setTheme } = useTheme();
+  const { resolvedTheme, setTheme } = useTheme();
   const { impact, notification } = useHaptics();
   const [showSplash, setShowSplash] = useState(true);
 
@@ -93,7 +144,7 @@ export default function Home() {
     // Optimistic update
     const newHistory = history.filter(h => h.timestamp !== item.timestamp);
     setHistory(newHistory);
-    localStorage.setItem('vocabulary_history', JSON.stringify(newHistory));
+    persistHistoryCache(newHistory);
 
     if (item.id) {
       try {
@@ -109,7 +160,7 @@ export default function Home() {
     // Optimistic update
     const newHistory = history.map(h => h.timestamp === updatedItem.timestamp ? updatedItem : h);
     setHistory(newHistory);
-    localStorage.setItem('vocabulary_history', JSON.stringify(newHistory));
+    persistHistoryCache(newHistory);
     setEditingItem(null);
 
     if (updatedItem.id) {
@@ -126,8 +177,14 @@ export default function Home() {
   };
 
   // Challenge system state
-  const [challenge, setChallenge] = useState<any>(null);
-  const [checkIns, setCheckIns] = useState<any[]>([]);
+  const [challenge, setChallenge] = useState<{
+    current_streak: number;
+    max_streak: number;
+    shield_cards: number;
+    target_days: number;
+    [key: string]: unknown;
+  } | null>(null);
+  const [checkIns, setCheckIns] = useState<{ date: string; wordsLearned: number }[]>([]);
 
   const [dailyTasks, setDailyTasks] = useState<DailyTask[]>([
     { id: '1', title: '完成今日学习计划', progress: 0, total: 1, coins: 10, completed: false },
@@ -168,30 +225,35 @@ export default function Home() {
           }
         })
         .catch(err => console.error('Failed to fetch check-ins:', err));
+
+      fetch('/api/history')
+        .then(async res => {
+          if (!res.ok) {
+            throw new Error('Failed to fetch history');
+          }
+
+          const data: HistoryApiItem[] = await res.json();
+          const normalized = data.map(normalizeHistoryItem);
+          setHistory(normalized);
+          setTodayStudied(getTodayWordCount(normalized));
+          persistHistoryCache(normalized);
+        })
+        .catch(err => {
+          console.error('Failed to fetch remote history:', err);
+          const cachedHistory = readHistoryCache();
+          setHistory(cachedHistory);
+          setTodayStudied(getTodayWordCount(cachedHistory));
+        });
+    } else if (isLoaded) {
+      const cachedHistory = readHistoryCache();
+      setHistory(cachedHistory);
+      setTodayStudied(getTodayWordCount(cachedHistory));
     }
   }, [isLoaded, isSignedIn]);
 
   // 初始化应用数据
   useEffect(() => {
     setIsNative(Capacitor.isNativePlatform());
-
-    // 加载历史记录
-    const savedHistory = localStorage.getItem('vocabulary_history');
-    if (savedHistory) {
-      try {
-        const parsedHistory = JSON.parse(savedHistory);
-        setHistory(parsedHistory);
-
-        // 计算今日学习数据
-        const today = new Date().setHours(0, 0, 0, 0);
-        const todayWords = parsedHistory.filter((h: HistoryItem) =>
-          new Date(h.timestamp).setHours(0, 0, 0, 0) === today
-        );
-        setTodayStudied(todayWords.length);
-      } catch (e) {
-        console.error('Failed to load history:', e);
-      }
-    }
 
     // 加载游戏数据
     const savedCoins = localStorage.getItem('user_coins');
@@ -402,7 +464,7 @@ export default function Home() {
       // 保存到数据库和本地
       const newHistory = [historyItem, ...history.slice(0, 19)];
       setHistory(newHistory);
-      localStorage.setItem('vocabulary_history', JSON.stringify(newHistory));
+      persistHistoryCache(newHistory);
 
       fetch('/api/history', {
         method: 'POST',
@@ -415,7 +477,21 @@ export default function Home() {
           sentence_cn: wordResult.sentence_cn,
           imageUrl: base64Image
         })
-      }).catch(err => console.error('Failed to save to database:', err));
+      })
+        .then(async res => {
+          if (!res.ok) {
+            throw new Error('Failed to save history');
+          }
+
+          const savedItem: HistoryApiItem = await res.json();
+          const normalized = normalizeHistoryItem(savedItem);
+          setHistory(current => {
+            const merged = [normalized, ...current.filter(entry => entry.timestamp !== historyItem.timestamp)].slice(0, 20);
+            persistHistoryCache(merged);
+            return merged;
+          });
+        })
+        .catch(err => console.error('Failed to save to database:', err));
 
     } catch (analyzeError) {
       console.error('Analysis error:', analyzeError);
@@ -666,7 +742,7 @@ export default function Home() {
 
                       <div className="bg-white rounded-2xl p-6">
                         <p className="text-base text-gray-900 italic mb-2">
-                          "{result.sentence}"
+                          &quot;{result.sentence}&quot;
                         </p>
                         <p className="text-sm text-gray-600">
                           {result.sentence_cn}
@@ -760,7 +836,7 @@ export default function Home() {
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setItemToDelete(null)}>
               <div className="bg-white dark:bg-wise-card-dark rounded-3xl p-6 w-full max-w-sm shadow-xl transition-colors duration-300" onClick={e => e.stopPropagation()}>
                 <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">确认删除</h3>
-                <p className="text-gray-500 dark:text-gray-400 mb-6">确定要删除单词 "{itemToDelete.word}" 吗？此操作无法撤销。</p>
+                <p className="text-gray-500 dark:text-gray-400 mb-6">确定要删除单词 &quot;{itemToDelete.word}&quot; 吗？此操作无法撤销。</p>
                 <div className="flex gap-3">
                   <button
                     onClick={() => setItemToDelete(null)}
@@ -792,7 +868,7 @@ export default function Home() {
 
               {history.length > 0 ? (
                 <div className="grid grid-cols-2 gap-4">
-                  {history.map((item, index) => (
+                  {history.map((item) => (
                     <div
                       key={item.id || item.timestamp}
                       className="group relative bg-white dark:bg-wise-card-dark rounded-3xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300"
@@ -865,13 +941,13 @@ export default function Home() {
           {/* Stats Tab */}
           {activeTab === 'stats' && (
             <PageTransition key="stats" className="space-y-6">
-              <div className="bg-white rounded-3xl p-6 shadow-sm">
-                <h2 className="text-2xl font-bold text-gray-900 mb-1">学习统计</h2>
-                <p className="text-sm text-gray-500">你的进步一目了然</p>
+              <div className="bg-white dark:bg-wise-card-dark rounded-3xl p-6 shadow-sm transition-colors duration-300">
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">学习统计</h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400">你的进步一目了然</p>
               </div>
 
               <div className="space-y-4">
-                <div className="bg-gradient-to-br from-lime-50 to-emerald-50 rounded-3xl p-8 shadow-sm overflow-hidden relative">
+                <div className="bg-gradient-to-br from-lime-50 to-emerald-50 dark:from-lime-950/30 dark:to-emerald-950/20 rounded-3xl p-8 shadow-sm overflow-hidden relative transition-colors duration-300">
                   <img
                     src="/progress.png"
                     alt="Progress"
@@ -879,35 +955,35 @@ export default function Home() {
                   />
                   <div className="text-center relative z-10">
                     <div className="text-6xl font-bold text-lime-600 mb-2">{stats.total}</div>
-                    <div className="text-lg text-gray-700 font-medium">累计学习单词</div>
+                    <div className="text-lg text-gray-700 dark:text-gray-200 font-medium">累计学习单词</div>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-white rounded-3xl p-6 shadow-sm">
+                  <div className="bg-white dark:bg-wise-card-dark rounded-3xl p-6 shadow-sm transition-colors duration-300">
                     <div className="text-center">
-                      <div className="text-3xl font-bold text-gray-900 mb-2">{stats.today}</div>
-                      <div className="text-sm text-gray-600">今日学习</div>
+                      <div className="text-3xl font-bold text-gray-900 dark:text-white mb-2">{stats.today}</div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400">今日学习</div>
                     </div>
                   </div>
-                  <div className="bg-white rounded-3xl p-6 shadow-sm">
+                  <div className="bg-white dark:bg-wise-card-dark rounded-3xl p-6 shadow-sm transition-colors duration-300">
                     <div className="text-center">
-                      <div className="text-3xl font-bold text-gray-900 mb-2">{stats.thisWeek}</div>
-                      <div className="text-sm text-gray-600">本周学习</div>
+                      <div className="text-3xl font-bold text-gray-900 dark:text-white mb-2">{stats.thisWeek}</div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400">本周学习</div>
                     </div>
                   </div>
                 </div>
 
-                <div className="bg-white rounded-3xl p-6 shadow-sm">
-                  <h3 className="font-semibold text-gray-900 mb-4">学习趋势</h3>
+                <div className="bg-white dark:bg-wise-card-dark rounded-3xl p-6 shadow-sm transition-colors duration-300">
+                  <h3 className="font-semibold text-gray-900 dark:text-white mb-4">学习趋势</h3>
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">日均学习</span>
-                      <span className="text-lg font-bold text-gray-900">
+                      <span className="text-sm text-gray-600 dark:text-gray-400">日均学习</span>
+                      <span className="text-lg font-bold text-gray-900 dark:text-white">
                         {stats.total > 0 ? Math.round(stats.total / 7) : 0}
                       </span>
                     </div>
-                    <div className="w-full bg-gray-100 rounded-full h-2">
+                    <div className="w-full bg-gray-100 dark:bg-black/20 rounded-full h-2">
                       <div
                         className="bg-lime-500 h-2 rounded-full transition-all"
                         style={{ width: `${Math.min((stats.today / 10) * 100, 100)}%` }}
@@ -1026,10 +1102,10 @@ export default function Home() {
                 <div className="bg-white dark:bg-wise-card-dark rounded-3xl p-5 shadow-sm flex items-center justify-between transition-colors duration-300">
                   <span className="text-gray-900 dark:text-white font-medium">深色模式</span>
                   <button
-                    onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                    className={`w-11 h-6 rounded-full transition-colors relative ${theme === 'dark' ? 'bg-wise-lime' : 'bg-gray-200'}`}
+                    onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+                    className={`w-11 h-6 rounded-full transition-colors relative ${resolvedTheme === 'dark' ? 'bg-wise-lime' : 'bg-gray-200'}`}
                   >
-                    <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-all ${theme === 'dark' ? 'left-6' : 'left-1'}`}></div>
+                    <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-all ${resolvedTheme === 'dark' ? 'left-6' : 'left-1'}`}></div>
                   </button>
                 </div>
 

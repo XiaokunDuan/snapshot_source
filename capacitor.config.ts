@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
     appName: 'Snapshot',
     webDir: 'out',
     server: {
-        androidScheme: 'https',
+        androidScheme: 'http',
         url: 'http://localhost:3000', // Route via USB ADB Reverse
         cleartext: true,
         allowNavigation: ['*']

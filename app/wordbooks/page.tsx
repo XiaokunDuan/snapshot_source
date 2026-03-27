@@ -34,9 +34,20 @@ export default function WordBooksPage() {
     };
 
     useEffect(() => {
-        if (isLoaded && isSignedIn) {
-            fetchWordBooks();
-        }
+        if (!isLoaded || !isSignedIn) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await fetch('/api/wordbooks');
+                const data = await res.json();
+                if (!cancelled && data.wordBooks) {
+                    setWordBooks(data.wordBooks);
+                }
+            } catch (error) {
+                console.error('Failed to fetch word books:', error);
+            }
+        })();
+        return () => { cancelled = true; };
     }, [isLoaded, isSignedIn]);
 
     const createWordBook = async () => {

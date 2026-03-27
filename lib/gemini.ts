@@ -1,12 +1,48 @@
-import { NextResponse } from 'next/server';
-
 // Global counter for round-robin
 let requestCounter = 0;
 
 export interface GeminiRequestOptions {
     method?: string;
     headers?: Record<string, string>;
-    body?: any;
+    body?: Record<string, unknown>;
+}
+
+function toErrorMessage(error: unknown) {
+    if (error instanceof Error) {
+        return error.message;
+    }
+
+    if (
+        typeof error === 'object' &&
+        error !== null &&
+        'details' in error &&
+        typeof (error as { details?: unknown }).details === 'object'
+    ) {
+        const details = (error as {
+            status?: number;
+            details?: { error?: { message?: string } };
+        }).details;
+
+        const message = details?.error?.message;
+        if (message) {
+            return message;
+        }
+    }
+
+    if (
+        typeof error === 'object' &&
+        error !== null &&
+        'message' in error &&
+        typeof (error as { message?: unknown }).message === 'string'
+    ) {
+        return (error as { message: string }).message;
+    }
+
+    try {
+        return JSON.stringify(error);
+    } catch {
+        return 'Unknown Gemini error';
+    }
 }
 
 /**
@@ -28,10 +64,10 @@ export async function fetchWithKeyRotation(
     }
 
     const maxTries = apiKeys.length;
-    let lastError: any = null;
+    let lastError: unknown = null;
 
     // Start from the current global index
-    let startIndex = requestCounter % apiKeys.length;
+    const startIndex = requestCounter % apiKeys.length;
 
     for (let i = 0; i < maxTries; i++) {
         const currentIndex = (startIndex + i) % apiKeys.length;
@@ -102,5 +138,5 @@ export async function fetchWithKeyRotation(
         }
     }
 
-    throw lastError || new Error('All API keys failed');
+    throw new Error(lastError ? toErrorMessage(lastError) : 'All API keys failed');
 }

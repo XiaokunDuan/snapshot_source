@@ -1,37 +1,33 @@
-// Database migration script for Baicizhan-style features
 import { Pool, neonConfig } from '@neondatabase/serverless';
 import ws from 'ws';
 import * as dotenv from 'dotenv';
 
 dotenv.config({ path: '.env.local' });
 
-// Set the WebSocket constructor to enable local Node.js execution
 neonConfig.webSocketConstructor = ws;
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
-async function migrate() {
-    const client = await pool.connect();
+async function setupDatabase() {
+  const client = await pool.connect();
 
-    try {
-        console.log('Starting database migration...');
+  try {
+    console.log('Starting database setup...');
 
-        // 1. Create users table
-        await client.query(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
         clerk_user_id VARCHAR(255) UNIQUE NOT NULL,
         email VARCHAR(255) UNIQUE NOT NULL,
         username VARCHAR(100),
         avatar_url TEXT,
+        coins INTEGER DEFAULT 0,
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
       );
     `);
-        console.log('✓ Users table created');
 
-        // 2. Create learning_challenges table
-        await client.query(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS learning_challenges (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -45,10 +41,8 @@ async function migrate() {
         completed_at TIMESTAMP
       );
     `);
-        console.log('✓ Learning challenges table created');
 
-        // 3. Create check_ins table
-        await client.query(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS check_ins (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -59,10 +53,8 @@ async function migrate() {
         UNIQUE(user_id, check_in_date)
       );
     `);
-        console.log('✓ Check-ins table created');
 
-        // 4. Create word_books table
-        await client.query(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS word_books (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -72,10 +64,8 @@ async function migrate() {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
-        console.log('✓ Word books table created');
 
-        // 5. Create saved_words table
-        await client.query(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS saved_words (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -92,10 +82,8 @@ async function migrate() {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
-        console.log('✓ Saved words table created');
 
-        // 6. Create notifications table
-        await client.query(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS notifications (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -107,42 +95,36 @@ async function migrate() {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
-        console.log('✓ Notifications table created');
 
-        // 7. Update history_records table to add user_id
-        try {
-            await client.query(`
-        ALTER TABLE history_records 
-        ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
-      `);
-            await client.query(`
-        ALTER TABLE history_records 
-        ADD COLUMN IF NOT EXISTS mastered BOOLEAN DEFAULT FALSE;
-      `);
-            console.log('✓ History records table updated');
-        } catch (error) {
-            console.log('⚠ History records table may already have these columns');
-        }
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS vocabulary_history (
+        id SERIAL PRIMARY KEY,
+        word VARCHAR(100) NOT NULL,
+        phonetic VARCHAR(100),
+        meaning TEXT NOT NULL,
+        sentence TEXT,
+        sentence_cn TEXT,
+        image_url TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
 
-        // Create indexes for better performance
-        await client.query(`
+    await client.query(`
       CREATE INDEX IF NOT EXISTS idx_users_clerk_id ON users(clerk_user_id);
       CREATE INDEX IF NOT EXISTS idx_check_ins_user_date ON check_ins(user_id, check_in_date);
       CREATE INDEX IF NOT EXISTS idx_saved_words_user_book ON saved_words(user_id, word_book_id);
       CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, is_read);
+      CREATE INDEX IF NOT EXISTS idx_vocabulary_history_created_at ON vocabulary_history(created_at DESC);
     `);
-        console.log('✓ Indexes created');
 
-        console.log('\n✅ Migration completed successfully!');
-
-    } catch (error) {
-        console.error('❌ Migration failed:', error);
-        throw error;
-    } finally {
-        client.release();
-        await pool.end();
-    }
+    console.log('Database setup completed successfully.');
+  } finally {
+    client.release();
+    await pool.end();
+  }
 }
 
-// Run migration
-migrate().catch(console.error);
+setupDatabase().catch((error) => {
+  console.error('Database setup failed:', error);
+  process.exit(1);
+});
