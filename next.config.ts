@@ -10,7 +10,7 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: true
   },
-  trailingSlash: true
+  // trailingSlash: true  // Disabled: conflicts with Clerk sign-in/sign-up routing
 };
 
 export default nextConfig;
