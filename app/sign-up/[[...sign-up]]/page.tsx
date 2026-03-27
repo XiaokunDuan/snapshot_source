@@ -15,6 +15,10 @@ export default function SignUpPage() {
                 </div>
 
                 <SignUp
+                    path="/sign-up"
+                    routing="path"
+                    signInUrl="/sign-in"
+                    forceRedirectUrl="/"
                     appearance={{
                         elements: {
                             rootBox: "mx-auto",
