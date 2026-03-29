@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
-import { useUser, UserButton } from '@clerk/nextjs';
+import { useState, useRef, useEffect, useMemo } from 'react';
+import { SignOutButton, useUser, UserButton } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { Camera as CameraIcon, BookOpen, TrendingUp, Award, User as UserIcon, Home as HomeIcon, BarChart3, Loader2, Edit2, Trash2, Sparkles, ShieldCheck, X, MoveDown } from 'lucide-react';
@@ -19,7 +19,7 @@ import { UploadDrawer } from './components/UploadDrawer';
 import { BillingDrawer } from './components/BillingDrawer';
 import { InstallAppPrompt } from './components/InstallAppPrompt';
 import { trackClientEvent } from '@/lib/analytics-client';
-import { LocaleToggle, useMessages } from '@/app/components/LocaleProvider';
+import { LocaleToggle, useLocale } from '@/app/components/LocaleProvider';
 import { DEFAULT_LANGUAGE, LANGUAGE_LABELS, normalizeLanguageCode, normalizeVariants, SUPPORTED_LANGUAGE_CODES, type LanguageCode, type LanguageVariant } from '@/lib/language-content';
 
 interface WordResult {
@@ -33,6 +33,7 @@ interface WordResult {
   availableLanguages: LanguageCode[];
   primaryLanguage: LanguageCode;
   variants: Record<LanguageCode, LanguageVariant>;
+  enhancementPending?: boolean;
 }
 
 interface HistoryItem extends WordResult {
@@ -72,6 +73,7 @@ interface BillingStatus {
 const HISTORY_CACHE_KEY = 'vocabulary_history';
 const PRIMARY_LANGUAGE_KEY = 'snapshot_primary_language';
 const HOME_PROMO_DISMISSED_KEY = 'snapshot_home_promo_dismissed';
+const TARGET_LANGUAGES_KEY = 'snapshot_target_languages';
 
 function persistHistoryCache(items: HistoryItem[]) {
   localStorage.setItem(HISTORY_CACHE_KEY, JSON.stringify(items));
@@ -124,13 +126,6 @@ function normalizeHistoryItem(item: HistoryApiItem): HistoryItem {
   };
 }
 
-function getTodayWordCount(items: HistoryItem[]) {
-  const today = new Date().setHours(0, 0, 0, 0);
-  return items.filter((item) =>
-    new Date(item.timestamp).setHours(0, 0, 0, 0) === today
-  ).length;
-}
-
 function readHistoryCache() {
   const savedHistory = localStorage.getItem(HISTORY_CACHE_KEY);
   if (!savedHistory) {
@@ -158,11 +153,11 @@ function isWordResult(value: unknown): value is WordResult {
 type TabType = 'home' | 'history' | 'stats' | 'profile';
 
 export default function Home() {
-  const copy = useMessages();
+  const { locale, setLocale } = useLocale();
   const { user, isLoaded, isSignedIn } = useUser();
   const router = useRouter();
   const { resolvedTheme, setTheme } = useTheme();
-  const { impact, notification } = useHaptics();
+  const { impact, notification, selection } = useHaptics();
   const [showSplash, setShowSplash] = useState(true);
 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -175,11 +170,11 @@ export default function Home() {
   const isUploading = false;
   const [billing, setBilling] = useState<BillingStatus | null>(null);
   const [showBillingDrawer, setShowBillingDrawer] = useState(false);
-  const [todayStudied, setTodayStudied] = useState(0);
-  const [dailyGoal] = useState(10);
   const [preferredLanguage, setPreferredLanguage] = useState<LanguageCode>(DEFAULT_LANGUAGE);
+  const [targetLanguages, setTargetLanguages] = useState<LanguageCode[]>(['zh-CN', 'en', 'ja', 'fr', 'ru']);
   const [dismissedHomePromo, setDismissedHomePromo] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
   const [editingItem, setEditingItem] = useState<HistoryItem | null>(null);
   const [itemToDelete, setItemToDelete] = useState<HistoryItem | null>(null);
@@ -217,7 +212,7 @@ export default function Home() {
       setIsEditingName(false);
     } catch (err) {
       console.error('Failed to update name:', err);
-      alert('更新名字失败，请重试');
+      alert(locale === 'en' ? 'Failed to update your name. Please try again.' : '更新名字失败，请重试');
     }
   };
 
@@ -345,31 +340,26 @@ export default function Home() {
               const historyData: HistoryApiItem[] = await historyRes.value.json();
               const normalized = historyData.map(normalizeHistoryItem);
               setHistory(normalized);
-              setTodayStudied(getTodayWordCount(normalized));
               persistHistoryCache(normalized);
             } else {
               console.error(`Failed to fetch history: ${historyRes.value.status}`);
               const cachedHistory = readHistoryCache();
               setHistory(cachedHistory);
-              setTodayStudied(getTodayWordCount(cachedHistory));
             }
           } else {
             console.error('Failed to fetch remote history:', historyRes.reason);
             const cachedHistory = readHistoryCache();
             setHistory(cachedHistory);
-            setTodayStudied(getTodayWordCount(cachedHistory));
           }
         } catch (err) {
           console.error('Failed to sync user or initialize dashboard:', err);
           const cachedHistory = readHistoryCache();
           setHistory(cachedHistory);
-          setTodayStudied(getTodayWordCount(cachedHistory));
         }
       })();
     } else if (isLoaded) {
       const cachedHistory = readHistoryCache();
       setHistory(cachedHistory);
-      setTodayStudied(getTodayWordCount(cachedHistory));
     }
   }, [isLoaded, isSignedIn]);
 
@@ -385,6 +375,22 @@ export default function Home() {
     }
 
     setPreferredLanguage(getStoredPrimaryLanguage());
+    if (typeof window !== 'undefined') {
+      const storedLanguages = window.localStorage.getItem(TARGET_LANGUAGES_KEY);
+      if (storedLanguages) {
+        try {
+          const parsed = JSON.parse(storedLanguages) as string[];
+          const normalized = parsed
+            .map((value) => normalizeLanguageCode(value))
+            .filter((value, index, list) => list.indexOf(value) === index);
+          if (normalized.length > 0) {
+            setTargetLanguages(normalized);
+          }
+        } catch {
+          // ignore malformed storage
+        }
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -392,6 +398,244 @@ export default function Home() {
       window.localStorage.setItem(PRIMARY_LANGUAGE_KEY, preferredLanguage);
     }
   }, [preferredLanguage]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(TARGET_LANGUAGES_KEY, JSON.stringify(targetLanguages));
+    }
+  }, [targetLanguages]);
+
+  const ui = useMemo(() => locale === 'en' ? {
+    signIn: 'Sign in',
+    signUp: 'Create account',
+    profile: 'Profile',
+    landingAlready: 'Already have an account',
+    landingHero: 'Turn the camera into a multilingual learning desk.',
+    landingHeroBody: 'Capture a real scene, extract the core object, switch languages, and archive it into the libraries you care about.',
+    landingLearnFirst: 'Learn the flow first',
+    landingSectionTitle: 'What you get first',
+    landingSectionBody: 'Use the product before you think about paying. Login comes later, and upgrade stays inside the app.',
+    landingReadyTitle: 'Only sign in when you are ready to learn.',
+    landingReadyBody: 'Google or GitHub sign-in unlocks your free analyses. Upgrade appears later, only after you start using the product.',
+    freeTag: '20 free analyses',
+    multiTag: '5 language libraries',
+    deskTitle: 'Drop an image into the learning desk',
+    deskSubtitleWeb: 'Supported image formats are compressed before Gemini analysis and archive sync.',
+    deskSubtitleNative: 'Pick an image and turn the core object into a multilingual learning card.',
+    week: 'This week',
+    allTime: 'All time',
+    today: 'Today',
+    archiveCount: 'Archive',
+    homeTitle: 'Learn from what the camera notices.',
+    homeBody: 'Take one photo, isolate one concept, then turn it into a study sample worth revisiting.',
+    snapshotStudio: 'Snapshot studio',
+    dailyCadence: 'Daily cadence',
+    uploadTag1: 'AI extraction',
+    uploadTag2: 'Archive ready',
+    promoTitleFree: (remaining: number) => `${remaining} free analyses left`,
+    promoTextFree: 'Use the free tier first. Upgrade only when you want more capacity.',
+    promoCtaFree: 'Learn about Pro',
+    resultObject: 'Detected object',
+    example: 'Example',
+    pronunciation: 'Pronunciation & usage',
+    related: 'Related forms',
+    culture: 'Culture note',
+    continueLearning: 'Keep learning',
+    archive: 'Language archive',
+    noHistory: 'No learning records yet',
+    noHistoryHint: (language: string) => `Upload one image to create your first ${language} archive entry.`,
+    appLanguage: 'App language',
+    primaryLanguage: 'Primary study language',
+    targetLibraries: 'Save to language libraries',
+    targetLibrariesHint: 'Selected languages are saved automatically after each photo, and each result is added to those matching libraries.',
+    membership: 'Membership',
+    freeStatus: (remaining: number, limit: number) => `Free tier active · ${remaining}/${limit} analyses left`,
+    darkMode: 'Dark mode',
+    about: 'About',
+    signOut: 'Sign out',
+    editName: 'Edit name',
+    totalWords: 'Total',
+    weekWords: 'Week',
+    todayWords: 'Today',
+    historyTitle: (language: string) => `${language} archive`,
+    historyCount: (count: number) => `${count} entries archived by image, language, and date.`,
+    statsTitle: 'Learning metrics',
+    statsBody: 'A calmer editorial view of how often you return to the desk.',
+    totalStudied: 'Total studied',
+    studiedToday: 'Today',
+    studiedWeek: 'This week',
+    trend: 'Learning rhythm',
+    averageDaily: 'Daily average',
+    save: 'Save',
+    cancel: 'Cancel',
+    delete: 'Delete',
+    editWord: 'Edit entry',
+    deleteTitle: 'Delete entry',
+    deleteBody: (word: string) => `Delete "${word}" from the archive? This action cannot be undone.`,
+    appVersion: 'Version 1.0.0',
+    close: 'Close',
+    billingView: 'View',
+    billingUpgrade: 'Upgrade',
+    home: 'Home',
+    history: 'Archive',
+    stats: 'Stats',
+    me: 'Me',
+    captureNative: 'Native capture',
+    captureNativeTitle: 'Capture with the camera',
+    captureNativeBody: 'Use the camera directly and turn the current scene into a study card.',
+    uploadGallery: 'gallery',
+    dragRelease: 'Release to start',
+    loading: 'AI is analysing...',
+    loadingSub: 'Breaking down the image content',
+    langLabel: 'Library language',
+    appLanguageHint: 'This changes the interface language only. English stays fully English, Chinese stays fully Chinese.',
+    signOutHint: 'Leave this account and return to the intro flow.',
+    aboutSummary1: 'Photo-first vocabulary capture',
+    aboutSummary2: 'AI-generated study notes',
+    aboutSummary3: 'Archive and review flow',
+    aboutSummary4: 'Editorial learning desk',
+    cameraError: 'Camera access failed. Please check permissions.',
+    galleryError: 'Photo library access failed. Please check permissions.',
+    uploadError: 'Failed to process the image. Please try again.',
+  } : {
+    signIn: '登录',
+    signUp: '创建账号',
+    profile: '我的档案',
+    landingAlready: '已有账号，直接登录',
+    landingHero: '把相机看到的场景，变成多语言学习台。',
+    landingHeroBody: '拍下真实世界里的一个物体或概念，提炼它，再切换不同语言保存进你选中的语言库。',
+    landingLearnFirst: '先理解流程',
+    landingSectionTitle: '你先得到什么',
+    landingSectionBody: '先用，再决定要不要付费。登录放后面，升级也只在应用里面出现。',
+    landingReadyTitle: '准备开始学的时候，再去登录。',
+    landingReadyBody: '用 Google 或 GitHub 登录后，会先拿到免费识图额度。只有当你真的开始用，并且需要扩容时，才会看到升级入口。',
+    freeTag: '20 次免费识图',
+    multiTag: '5 个语言库',
+    deskTitle: '把一张图放进学习台',
+    deskSubtitleWeb: '支持常见图片格式。上传后会自动压缩，再进入 Gemini 分析与历史归档流程。',
+    deskSubtitleNative: '选一张图，系统会提炼核心对象，再生成多语言学习卡片。',
+    week: '本周',
+    allTime: '累计',
+    today: '今天',
+    archiveCount: '档案',
+    homeTitle: '让相机先注意到，再开始学习。',
+    homeBody: '拍一张图，抓住一个概念，再把它变成可以反复复习的语言样本。',
+    snapshotStudio: 'Snapshot studio',
+    dailyCadence: '学习节奏',
+    uploadTag1: 'AI 提炼',
+    uploadTag2: '自动归档',
+    promoTitleFree: (remaining: number) => `还剩 ${remaining} 次免费识图`,
+    promoTextFree: '先把免费额度用起来。之后如果你想继续扩容，再开启 3 天试用。',
+    promoCtaFree: '了解 Pro',
+    resultObject: '识别对象',
+    example: '例句',
+    pronunciation: '发音与用法',
+    related: '相关词形',
+    culture: '文化补充',
+    continueLearning: '继续学习',
+    archive: '语言库档案',
+    noHistory: '还没有学习记录',
+    noHistoryHint: (language: string) => `从首页上传一张图，先建立第一条 ${language} 档案。`,
+    appLanguage: '应用语言',
+    primaryLanguage: '默认学习语言',
+    targetLibraries: '保存到语言库',
+    targetLibrariesHint: '你勾选的语言会在每次拍照后自动保存到对应语言库里，后面翻记录时会直接按这些库来归档。',
+    membership: '会员与额度',
+    freeStatus: (remaining: number, limit: number) => `当前是免费层，剩余 ${remaining}/${limit} 次识图额度`,
+    darkMode: '深色模式',
+    about: '关于应用',
+    signOut: '退出登录',
+    editName: '修改昵称',
+    totalWords: '总词汇',
+    weekWords: '本周',
+    todayWords: '今日',
+    historyTitle: (language: string) => `${language} 语言库`,
+    historyCount: (count: number) => `${count} 条记录，按图像、语言和日期归档。`,
+    statsTitle: '学习统计',
+    statsBody: '用更接近编辑年鉴的方式看你的学习密度。',
+    totalStudied: '累计学习',
+    studiedToday: '今日学习',
+    studiedWeek: '本周学习',
+    trend: '学习趋势',
+    averageDaily: '日均学习',
+    save: '保存',
+    cancel: '取消',
+    delete: '删除',
+    editWord: '编辑词条',
+    deleteTitle: '确认删除',
+    deleteBody: (word: string) => `确定要删除“${word}”吗？此操作无法撤销。`,
+    appVersion: '版本 1.0.0',
+    close: '关闭',
+    billingView: '查看',
+    billingUpgrade: '升级',
+    home: '主页',
+    history: '记录',
+    stats: '统计',
+    me: '我的',
+    captureNative: '原生拍照',
+    captureNativeTitle: '拍照识别',
+    captureNativeBody: '直接使用相机，把当前场景里的核心对象切成可学的卡片。',
+    uploadGallery: '相册 / 拖拽',
+    dragRelease: '松开，开始识别',
+    loading: 'AI 识别中...',
+    loadingSub: '正在分析图片内容',
+    langLabel: '语言库语言',
+    appLanguageHint: '这里只会切换界面语言。英文模式尽量全英文，中文模式尽量全中文。',
+    signOutHint: '退出当前账号，回到介绍页重新开始。',
+    aboutSummary1: '拍照优先的词汇提取',
+    aboutSummary2: 'AI 生成学习补充',
+    aboutSummary3: '归档与复习流程',
+    aboutSummary4: '编辑感学习台',
+    cameraError: '无法访问相机，请检查权限设置',
+    galleryError: '无法访问相册，请检查权限设置',
+    uploadError: '图片处理失败，请重试',
+  }, [locale]);
+
+  const playTap = () => {
+    try {
+      selection();
+      if (typeof window === 'undefined') {
+        return;
+      }
+
+      const Context = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!Context) {
+        return;
+      }
+
+      const context = audioContextRef.current ?? new Context();
+      audioContextRef.current = context;
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.type = 'triangle';
+      oscillator.frequency.value = 720;
+      gain.gain.value = 0.0001;
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      const now = context.currentTime;
+      gain.gain.exponentialRampToValueAtTime(0.015, now + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.08);
+      oscillator.start(now);
+      oscillator.stop(now + 0.08);
+    } catch {
+      // no-op
+    }
+  };
+
+  const toggleTargetLanguage = (language: LanguageCode) => {
+    playTap();
+    setTargetLanguages((current) => {
+      const exists = current.includes(language);
+      const next = exists ? current.filter((item) => item !== language) : [...current, language];
+      if (next.length === 0) {
+        return current;
+      }
+      if (!next.includes(preferredLanguage)) {
+        setPreferredLanguage(next[0]);
+      }
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -414,14 +658,17 @@ export default function Home() {
       <div className="editorial-shell min-h-screen text-[var(--editorial-ink)]">
         <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-10 px-5 py-6 sm:px-6 sm:py-10">
           <div className="flex items-center justify-between border-b border-[var(--editorial-border)] pb-5">
-            <img src="/logo-compact.png" alt="Snapshot Logo" className="h-10 w-auto" />
+            <img src="/logo-compact.png" alt="Snapshot Logo" className="h-10 w-auto rounded-2xl" />
             <div className="flex items-center gap-3">
               <LocaleToggle />
               <button
-                onClick={() => router.push('/sign-in')}
+                onClick={() => {
+                  playTap();
+                  router.push('/sign-in');
+                }}
                 className="rounded-full border border-[var(--editorial-border)] bg-[var(--editorial-panel)] px-5 py-2 text-sm font-semibold"
               >
-                {copy.actions.signIn}
+                {ui.signIn}
               </button>
             </div>
           </div>
@@ -433,28 +680,34 @@ export default function Home() {
                 Visual language desk
               </div>
               <h1 className="editorial-serif mt-6 max-w-3xl text-5xl font-semibold leading-[0.94] tracking-[-0.04em] md:text-7xl editorial-breathe">
-                {copy.landing.title}
+                {ui.landingHero}
               </h1>
               <p className="mt-6 max-w-xl text-lg leading-8 text-[var(--editorial-muted)]">
-                拍照、识别、切语言、保存进词库。先让用户理解产品，再决定是否继续深入或升级。
+                {ui.landingHeroBody}
               </p>
               <div className="mt-8 flex flex-wrap gap-4">
                 <button
-                  onClick={scrollToEntry}
+                  onClick={() => {
+                    playTap();
+                    scrollToEntry();
+                  }}
                   className="rounded-full bg-[var(--editorial-ink)] px-7 py-4 text-sm font-semibold text-[var(--editorial-paper)]"
                 >
-                  先看看怎么用
+                  {ui.landingLearnFirst}
                 </button>
                 <button
-                  onClick={() => router.push('/sign-in')}
+                  onClick={() => {
+                    playTap();
+                    router.push('/sign-in');
+                  }}
                   className="rounded-full border border-[var(--editorial-border)] bg-[var(--editorial-panel)] px-7 py-4 text-sm font-semibold"
                 >
-                  {copy.actions.signIn}
+                  {ui.signIn}
                 </button>
               </div>
               <div className="mt-10 flex flex-wrap gap-3 text-xs uppercase tracking-[0.22em] text-[var(--editorial-muted)]">
                 <span className="rounded-full border border-[var(--editorial-border)] px-4 py-3">camera first</span>
-                <span className="rounded-full border border-[var(--editorial-border)] px-4 py-3">20 free analyses</span>
+                <span className="rounded-full border border-[var(--editorial-border)] px-4 py-3">{ui.freeTag}</span>
                 <span className="rounded-full border border-[var(--editorial-border)] px-4 py-3">multilingual desk</span>
               </div>
             </div>
@@ -462,35 +715,35 @@ export default function Home() {
             <div className="editorial-panel p-6 sm:p-8 editorial-float">
               <div className="rounded-[2.25rem] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.86)] p-6 dark:bg-[rgba(255,255,255,0.03)]">
                 <div className="flex items-center justify-between">
-                  <h2 className="editorial-serif text-3xl font-semibold">Learning flow</h2>
-                  <span className="editorial-accent-pill">mobile first</span>
+                  <h2 className="editorial-serif text-3xl font-semibold">{locale === 'en' ? 'Learning flow' : '学习流程'}</h2>
+                  <span className="editorial-accent-pill">{locale === 'en' ? 'mobile first' : '移动优先'}</span>
                 </div>
                 <div className="mt-8 space-y-3 rounded-[2rem] border border-[var(--editorial-border)] bg-[var(--editorial-panel)] p-5">
                   <div className="flex items-center justify-between text-sm text-[var(--editorial-muted)]">
                     <span>1. Capture</span>
-                    <span>拍照 / 上传</span>
+                    <span>{locale === 'en' ? 'Camera / upload' : '拍照 / 上传'}</span>
                   </div>
                   <div className="flex items-center justify-between text-sm text-[var(--editorial-muted)]">
                     <span>2. Extract</span>
-                    <span>识别 / 语言切换</span>
+                    <span>{locale === 'en' ? 'Extract / switch languages' : '识别 / 语言切换'}</span>
                   </div>
                   <div className="flex items-center justify-between border-t border-[var(--editorial-border)] pt-4 text-base font-semibold">
                     <span>3. Archive</span>
-                    <span>历史 / 复习 / 词库</span>
+                    <span>{locale === 'en' ? 'Archive / review / libraries' : '历史 / 复习 / 词库'}</span>
                   </div>
                 </div>
                 <div className="mt-6 space-y-3 text-sm text-[var(--editorial-muted)]">
                   <div className="flex items-center gap-3">
                     <ShieldCheck className="h-4 w-4 text-[var(--editorial-accent)]" />
-                    先体验识图，再在应用内决定是否升级订阅
+                    {locale === 'en' ? 'Use extraction first, then decide about upgrading inside the app.' : '先体验识图，再在应用内决定是否升级订阅'}
                   </div>
                   <div className="flex items-center gap-3">
                     <ShieldCheck className="h-4 w-4 text-[var(--editorial-accent)]" />
-                    手机版支持安装到主屏幕，像 App 一样打开
+                    {locale === 'en' ? 'Install Snapshot to your home screen and open it like an app.' : '手机版支持安装到主屏幕，像 App 一样打开'}
                   </div>
                   <div className="flex items-center gap-3">
                     <MoveDown className="h-4 w-4 text-[var(--editorial-accent)]" />
-                    往下滑到底部，再决定是否登录开始使用
+                    {locale === 'en' ? 'Scroll down, then decide when to sign in.' : '往下滑到底部，再决定是否登录开始使用'}
                   </div>
                 </div>
               </div>
@@ -499,44 +752,50 @@ export default function Home() {
 
           <section id="landing-entry" className="grid gap-4 md:grid-cols-[1.1fr_0.9fr]">
             <div className="editorial-panel p-7 sm:p-8">
-              <p className="editorial-kicker">What you get first</p>
-              <h2 className="editorial-serif mt-4 text-4xl font-semibold tracking-[-0.04em]">先体验，再决定要不要更深地学。</h2>
+              <p className="editorial-kicker">{ui.landingSectionTitle}</p>
+              <h2 className="editorial-serif mt-4 text-4xl font-semibold tracking-[-0.04em]">{ui.landingSectionBody}</h2>
               <div className="mt-6 grid gap-3 sm:grid-cols-3">
                 <div className="rounded-[1.8rem] border border-[var(--editorial-border)] bg-[rgba(255,255,255,0.45)] p-5 dark:bg-[rgba(255,255,255,0.03)]">
                   <div className="editorial-caption">Free tier</div>
                   <div className="mt-3 text-3xl font-semibold">20</div>
-                  <p className="mt-2 text-sm text-[var(--editorial-muted)]">免费识图额度</p>
+                  <p className="mt-2 text-sm text-[var(--editorial-muted)]">{ui.freeTag}</p>
                 </div>
                 <div className="rounded-[1.8rem] border border-[var(--editorial-border)] bg-[rgba(255,255,255,0.45)] p-5 dark:bg-[rgba(255,255,255,0.03)]">
                   <div className="editorial-caption">Modes</div>
                   <div className="mt-3 text-3xl font-semibold">5</div>
-                  <p className="mt-2 text-sm text-[var(--editorial-muted)]">首批语言切换</p>
+                  <p className="mt-2 text-sm text-[var(--editorial-muted)]">{ui.multiTag}</p>
                 </div>
                 <div className="rounded-[1.8rem] border border-[var(--editorial-border)] bg-[rgba(255,255,255,0.45)] p-5 dark:bg-[rgba(255,255,255,0.03)]">
                   <div className="editorial-caption">Archive</div>
                   <div className="mt-3 text-3xl font-semibold">1 tap</div>
-                  <p className="mt-2 text-sm text-[var(--editorial-muted)]">自动归档进历史</p>
+                  <p className="mt-2 text-sm text-[var(--editorial-muted)]">{locale === 'en' ? 'Auto-saved into your archive' : '自动归档进历史'}</p>
                 </div>
               </div>
             </div>
             <div className="editorial-panel p-7 sm:p-8">
               <p className="editorial-kicker">Get started</p>
-              <h2 className="editorial-serif mt-4 text-4xl font-semibold tracking-[-0.04em]">准备好了再登录，不需要一上来先付款。</h2>
+              <h2 className="editorial-serif mt-4 text-4xl font-semibold tracking-[-0.04em]">{ui.landingReadyTitle}</h2>
               <p className="mt-4 text-sm leading-7 text-[var(--editorial-muted)]">
-                先用 Google 或 GitHub 登录，拿到免费识图额度。只有当你真的开始使用，并且想继续扩容时，才会在应用里看到升级入口。
+                {ui.landingReadyBody}
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
                 <button
-                  onClick={() => router.push('/sign-up')}
+                  onClick={() => {
+                    playTap();
+                    router.push('/sign-up');
+                  }}
                   className="rounded-full bg-[var(--editorial-ink)] px-7 py-4 text-sm font-semibold text-[var(--editorial-paper)]"
                 >
-                  Get started
+                  {ui.signUp}
                 </button>
                 <button
-                  onClick={() => router.push('/sign-in')}
+                  onClick={() => {
+                    playTap();
+                    router.push('/sign-in');
+                  }}
                   className="rounded-full border border-[var(--editorial-border)] bg-[var(--editorial-panel)] px-7 py-4 text-sm font-semibold"
                 >
-                  已有账号，直接登录
+                  {ui.landingAlready}
                 </button>
               </div>
             </div>
@@ -590,7 +849,7 @@ export default function Home() {
       }
     } catch (error) {
       console.error('Camera error:', error);
-      alert('无法访问相机，请检查权限设置');
+      alert(ui.cameraError);
     }
   };
 
@@ -609,13 +868,13 @@ export default function Home() {
       }
     } catch (error) {
       console.error('Gallery error:', error);
-      alert('无法访问相册，请检查权限设置');
+      alert(ui.galleryError);
     }
   };
 
   const handleFile = async (file: File) => {
     if (!file.type.startsWith('image/')) {
-      alert('Please upload an image file');
+      alert(locale === 'en' ? 'Please upload an image file.' : '请上传图片文件');
       return;
     }
 
@@ -624,7 +883,7 @@ export default function Home() {
       await analyzeImage(optimizedImage);
     } catch (error) {
       console.error('Error:', error);
-      alert('Failed to process image. Please try again.');
+      alert(ui.uploadError);
     }
   };
 
@@ -689,10 +948,14 @@ export default function Home() {
             exampleTranslation: analyzeData.sentence_cn,
           },
         }),
+        enhancementPending: Boolean(analyzeData.enhancementPending),
       };
 
       setResult(wordResult);
-      setPreferredLanguage(normalizeLanguageCode(wordResult.primaryLanguage));
+      const nextPrimaryLanguage = targetLanguages.includes(preferredLanguage)
+        ? preferredLanguage
+        : targetLanguages[0] ?? normalizeLanguageCode(wordResult.primaryLanguage);
+      setPreferredLanguage(normalizeLanguageCode(nextPrimaryLanguage));
       setIsAnalyzing(false);
 
       // Trigger check-in
@@ -756,8 +1019,6 @@ export default function Home() {
           .catch(err => console.error('Failed to create check-in:', err));
       }
 
-      // 更新今日学习数
-      setTodayStudied(prev => prev + 1);
       void refreshBilling();
 
       const historyItem: HistoryItem = {
@@ -771,7 +1032,7 @@ export default function Home() {
       setHistory(newHistory);
       persistHistoryCache(newHistory);
 
-      fetch('/api/history', {
+      const persistHistoryPromise = fetch('/api/history', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -783,8 +1044,8 @@ export default function Home() {
           imageUrl: base64Image,
           sourceObject: wordResult.sourceObject,
           sourceLabelEn: wordResult.sourceLabelEn,
-          primaryLanguage: preferredLanguage,
-          targetLanguages: wordResult.availableLanguages,
+          primaryLanguage: nextPrimaryLanguage,
+          targetLanguages: targetLanguages,
           variantsJson: wordResult.variants,
         })
       })
@@ -796,18 +1057,111 @@ export default function Home() {
           const savedItem: HistoryApiItem = await res.json();
           const normalized = normalizeHistoryItem(savedItem);
           setHistory(current => {
-            const merged = [normalized, ...current.filter(entry => entry.timestamp !== historyItem.timestamp)].slice(0, 20);
+            const existing = current.find((entry) => entry.timestamp === historyItem.timestamp);
+            const mergedItem = existing
+              ? {
+                ...normalized,
+                ...existing,
+                id: normalized.id,
+              }
+              : normalized;
+            const merged = [mergedItem, ...current.filter(entry => entry.timestamp !== historyItem.timestamp)].slice(0, 20);
             persistHistoryCache(merged);
             return merged;
           });
+
+          return normalized;
         })
         .catch(err => console.error('Failed to save to database:', err));
+
+      if (wordResult.enhancementPending) {
+        void fetch('/api/analyze/enrich', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            sourceObject: wordResult.sourceObject,
+            sourceLabelEn: wordResult.sourceLabelEn,
+            word: wordResult.word,
+            phonetic: wordResult.phonetic,
+            meaning: wordResult.meaning,
+            sentence: wordResult.sentence,
+            sentence_cn: wordResult.sentence_cn,
+          }),
+        })
+          .then(async (response) => {
+            if (!response.ok) {
+              throw new Error(`Enhancement failed with ${response.status}`);
+            }
+
+            return response.json();
+          })
+          .then(async (enhanced) => {
+            const enhancedResult: WordResult = {
+              ...wordResult,
+              sourceObject: enhanced.sourceObject || wordResult.sourceObject,
+              sourceLabelEn: enhanced.sourceLabelEn || wordResult.sourceLabelEn,
+              availableLanguages: Array.isArray(enhanced.availableLanguages)
+                ? enhanced.availableLanguages.filter((language: unknown): language is LanguageCode => typeof language === 'string')
+                : wordResult.availableLanguages,
+              variants: normalizeVariants(enhanced.variants, wordResult.variants),
+              enhancementPending: false,
+            };
+
+            setResult((current) => {
+              if (!current) {
+                return current;
+              }
+              return current.word === wordResult.word && current.sourceObject === wordResult.sourceObject
+                ? enhancedResult
+                : current;
+            });
+
+            setHistory((current) => {
+              const merged = current.map((item) => item.timestamp === historyItem.timestamp
+                ? {
+                  ...item,
+                  ...enhancedResult,
+                }
+                : item);
+              persistHistoryCache(merged);
+              return merged;
+            });
+
+            const savedItem = await persistHistoryPromise;
+            if (savedItem?.id) {
+              await fetch('/api/history', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  id: savedItem.id,
+                  word: enhancedResult.word,
+                  phonetic: enhancedResult.phonetic,
+                  meaning: enhancedResult.meaning,
+                  sentence: enhancedResult.sentence,
+                  sentence_cn: enhancedResult.sentence_cn,
+                  primaryLanguage: nextPrimaryLanguage,
+                  variantsJson: enhancedResult.variants,
+                }),
+              }).catch((error) => {
+                console.error('Failed to persist enriched variants:', error);
+              });
+            }
+          })
+          .catch((error) => {
+            console.error('Failed to enrich language variants:', error);
+          });
+      }
 
     } catch (analyzeError) {
       console.error('Analysis error:', analyzeError);
       setCurrentImage(null);
       setResult(null);
-      alert(`分析失败: ${analyzeError instanceof Error ? analyzeError.message : '未知错误'}`);
+      alert(locale === 'en'
+        ? `Analysis failed: ${analyzeError instanceof Error ? analyzeError.message : 'Unknown error'}`
+        : `分析失败: ${analyzeError instanceof Error ? analyzeError.message : '未知错误'}`
+      );
       setIsAnalyzing(false);
     }
   };
@@ -872,9 +1226,7 @@ export default function Home() {
       || billing.remaining <= 5
     )
   );
-  const currentLocale = typeof navigator !== 'undefined' && navigator.language.toLowerCase().startsWith('en')
-    ? 'en-US'
-    : 'zh-CN';
+  const currentLocale = locale === 'en' ? 'en-US' : 'zh-CN';
   const mastheadDate = new Date().toLocaleDateString(currentLocale, {
     month: 'long',
     day: 'numeric',
@@ -911,38 +1263,35 @@ export default function Home() {
               <div className="editorial-panel overflow-hidden p-6 sm:p-8">
                 <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
                   <div className="max-w-2xl">
-                    <div className="editorial-kicker">Snapshot studio</div>
+                    <div className="editorial-kicker">{ui.snapshotStudio}</div>
                     <h1 className="editorial-serif mt-4 text-4xl font-semibold leading-[0.94] tracking-[-0.04em] sm:text-6xl">
-                      Learn from what
-                      <br />
-                      the camera notices.
+                      {ui.homeTitle}
                     </h1>
                     <p className="mt-4 max-w-xl text-sm leading-7 text-[var(--editorial-muted)] sm:text-base">
-                      拍一张图，抓住一个词，再把它变成可以复习的语言样本。首页现在只做一件事:
-                      更快进入识别与记忆。
+                      {ui.homeBody}
                     </p>
                     <div className="mt-6 flex flex-wrap gap-3">
                       <span className="editorial-accent-pill">{mastheadDate}</span>
                       <span className="rounded-full border border-[var(--editorial-border)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-[var(--editorial-muted)]">
-                        {stats.today} today
+                        {stats.today} {ui.today}
                       </span>
                     </div>
                   </div>
                   <div className="flex items-start gap-4 lg:flex-col lg:items-end">
                     <div className="editorial-rail min-w-[190px]">
-                      <p className="editorial-caption">Daily cadence</p>
+                      <p className="editorial-caption">{ui.dailyCadence}</p>
                       <div className="mt-3 grid grid-cols-3 gap-3">
                         <div>
                           <div className="text-3xl font-semibold">{stats.today}</div>
-                          <div className="editorial-caption mt-1">Today</div>
+                          <div className="editorial-caption mt-1">{ui.today}</div>
                         </div>
                         <div>
                           <div className="text-3xl font-semibold">{stats.thisWeek}</div>
-                          <div className="editorial-caption mt-1">Week</div>
+                          <div className="editorial-caption mt-1">{ui.week}</div>
                         </div>
                         <div>
                           <div className="text-3xl font-semibold">{stats.total}</div>
-                          <div className="editorial-caption mt-1">Archive</div>
+                          <div className="editorial-caption mt-1">{ui.archiveCount}</div>
                         </div>
                       </div>
                     </div>
@@ -982,14 +1331,17 @@ export default function Home() {
                   {/* Camera Button for Native */}
                   {isNative && (
                     <button
-                      onClick={takePicture}
+                      onClick={() => {
+                        playTap();
+                        void takePicture();
+                      }}
                       className="editorial-panel w-full p-8 text-left transition-all duration-300 hover:-translate-y-0.5"
                     >
                       <div className="flex items-center justify-between gap-6">
                         <div>
-                          <p className="editorial-caption">Native capture</p>
-                          <h2 className="editorial-serif mt-3 text-3xl font-semibold">拍照识别</h2>
-                          <p className="mt-3 max-w-md text-sm leading-7 text-[var(--editorial-muted)]">直接使用相机，把当前场景里的英文词汇切成可学的卡片。</p>
+                          <p className="editorial-caption">{ui.captureNative}</p>
+                          <h2 className="editorial-serif mt-3 text-3xl font-semibold">{ui.captureNativeTitle}</h2>
+                          <p className="mt-3 max-w-md text-sm leading-7 text-[var(--editorial-muted)]">{ui.captureNativeBody}</p>
                         </div>
                         <div className="rounded-full border border-[var(--editorial-border)] bg-[rgba(149,199,85,0.15)] p-5">
                           <CameraIcon className="h-12 w-12 text-[var(--editorial-accent)]" />
@@ -1000,10 +1352,14 @@ export default function Home() {
 
                   {/* Upload Area */}
                   <UploadDrawer
-                    onCamera={takePicture}
+                    onCamera={() => {
+                      playTap();
+                      void takePicture();
+                    }}
                     onGallery={() => {
+                      playTap();
                       if (isNative) {
-                        pickFromGallery();
+                        void pickFromGallery();
                       } else {
                         fileInputRef.current?.click();
                       }
@@ -1043,18 +1399,18 @@ export default function Home() {
                           />
                         </div>
                         <div>
-                          <p className="editorial-caption">Capture a fresh word</p>
+                          <p className="editorial-caption">{locale === 'en' ? 'Capture a fresh word' : '捕捉一个新概念'}</p>
                           <h2 className="editorial-serif mt-3 text-4xl font-semibold leading-tight">
-                            {isNative ? '从相册挑一张图' : (isDragging ? '松开，开始识别' : 'Drop an image into the learning desk')}
+                            {isNative ? (locale === 'en' ? 'Pick one image from the library' : '从相册挑一张图') : (isDragging ? ui.dragRelease : ui.deskTitle)}
                           </h2>
                           <p className="mt-4 text-sm leading-7 text-[var(--editorial-muted)]">
-                            {isNative ? '选一张图，系统会提炼图里的核心英文词汇并生成例句。' : '支持常见图片格式。上传后会自动压缩，再进入 Gemini 分析与历史归档流程。'}
+                            {isNative ? ui.deskSubtitleNative : ui.deskSubtitleWeb}
                           </p>
                           <div className="mt-5 flex flex-wrap gap-3 text-xs uppercase tracking-[0.22em] text-[var(--editorial-muted)]">
-                            <span className="rounded-full border border-[var(--editorial-border)] px-3 py-2">AI extraction</span>
-                            <span className="rounded-full border border-[var(--editorial-border)] px-3 py-2">Archive ready</span>
+                            <span className="rounded-full border border-[var(--editorial-border)] px-3 py-2">{ui.uploadTag1}</span>
+                            <span className="rounded-full border border-[var(--editorial-border)] px-3 py-2">{ui.uploadTag2}</span>
                             <span className="rounded-full border border-[var(--editorial-border)] px-3 py-2">
-                              {isNative ? 'gallery' : 'png jpg webp heic'}
+                              {isNative ? ui.uploadGallery : 'png jpg webp heic'}
                             </span>
                           </div>
                         </div>
@@ -1069,20 +1425,20 @@ export default function Home() {
                           <div className="rounded-2xl border border-[var(--editorial-border)] bg-[rgba(149,199,85,0.12)] p-2">
                             <TrendingUp className="h-5 w-5 text-[var(--editorial-accent)]" />
                           </div>
-                          <span className="editorial-caption">This week</span>
+                          <span className="editorial-caption">{ui.week}</span>
                         </div>
                         <div className="text-4xl font-semibold">{stats.thisWeek}</div>
-                        <div className="mt-1 text-sm text-[var(--editorial-muted)]">新词进入本周档案</div>
+                        <div className="mt-1 text-sm text-[var(--editorial-muted)]">{locale === 'en' ? 'New entries archived this week' : '新词进入本周档案'}</div>
                       </div>
                       <div className="editorial-panel">
                         <div className="mb-4 flex items-center gap-3">
                           <div className="rounded-2xl border border-[var(--editorial-border)] bg-[rgba(149,199,85,0.12)] p-2">
                             <Award className="h-5 w-5 text-[var(--editorial-accent)]" />
                           </div>
-                          <span className="editorial-caption">All time</span>
+                          <span className="editorial-caption">{ui.allTime}</span>
                         </div>
                         <div className="text-4xl font-semibold">{stats.total}</div>
-                        <div className="mt-1 text-sm text-[var(--editorial-muted)]">累计识别并保存的词条</div>
+                        <div className="mt-1 text-sm text-[var(--editorial-muted)]">{locale === 'en' ? 'Entries recognised and saved' : '累计识别并保存的词条'}</div>
                       </div>
                     </div>
 
@@ -1090,6 +1446,7 @@ export default function Home() {
                       <div className="editorial-panel relative overflow-hidden bg-[linear-gradient(135deg,rgba(28,25,20,0.96),rgba(45,42,33,0.92))] p-6 text-white shadow-sm">
                         <button
                           onClick={() => {
+                            playTap();
                             setDismissedHomePromo(true);
                             if (typeof window !== 'undefined') {
                               window.localStorage.setItem(HOME_PROMO_DISMISSED_KEY, '1');
@@ -1106,23 +1463,26 @@ export default function Home() {
                             </p>
                             <h3 className="editorial-serif mt-3 text-3xl font-semibold leading-tight">
                               {billing.subscriptionStatus === 'free'
-                                ? `还剩 ${billing.remaining} 次免费识图`
-                                : `剩余 ${billing.remaining} 次识别`}
+                                ? ui.promoTitleFree(billing.remaining)
+                                : (locale === 'en' ? `${billing.remaining} analyses left` : `剩余 ${billing.remaining} 次识别`)}
                             </h3>
                             <p className="mt-3 text-sm leading-7 text-white/70">
                               {billing.subscriptionStatus === 'free'
-                                ? '先把免费额度用起来。之后如果你想继续扩容，再开启 3 天试用。'
-                                : `当前状态：${billing.subscriptionStatus}，本周期已用 ${billing.usageCount}/${billing.monthlyLimit}`}
+                                ? ui.promoTextFree
+                                : (locale === 'en'
+                                  ? `Status: ${billing.subscriptionStatus}. Used ${billing.usageCount}/${billing.monthlyLimit} this cycle.`
+                                  : `当前状态：${billing.subscriptionStatus}，本周期已用 ${billing.usageCount}/${billing.monthlyLimit}`)}
                             </p>
                           </div>
                           <button
                             onClick={() => {
+                              playTap();
                               setShowBillingDrawer(true);
                               void trackClientEvent('billing_cta_clicked', { location: 'home_card' });
                             }}
                             className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-black"
                           >
-                            {billing.subscriptionStatus === 'free' ? '了解 Pro' : '查看订阅'}
+                            {billing.subscriptionStatus === 'free' ? ui.promoCtaFree : (locale === 'en' ? 'View subscription' : '查看订阅')}
                           </button>
                         </div>
                       </div>
@@ -1141,10 +1501,10 @@ export default function Home() {
                     </div>
                     <div>
                       <h3 className="editorial-serif mb-2 text-2xl font-semibold">
-                        {isUploading ? '加载中...' : 'AI 识别中...'}
+                        {isUploading ? (locale === 'en' ? 'Loading...' : '加载中...') : ui.loading}
                       </h3>
                       <p className="text-sm text-[var(--editorial-muted)]">
-                        {isUploading ? '请稍候' : '正在分析图片内容'}
+                        {isUploading ? (locale === 'en' ? 'Please wait' : '请稍候') : ui.loadingSub}
                       </p>
                     </div>
                   </div>
@@ -1165,7 +1525,7 @@ export default function Home() {
                   <div className="editorial-panel p-8">
                     <div className="space-y-6">
                       <div>
-                        <p className="editorial-caption">Detected object</p>
+                        <p className="editorial-caption">{ui.resultObject}</p>
                         <h2 className="editorial-serif mt-3 text-4xl font-semibold tracking-[-0.04em] sm:text-5xl">
                           {result.sourceObject}
                         </h2>
@@ -1178,7 +1538,10 @@ export default function Home() {
                         {SUPPORTED_LANGUAGE_CODES.map((language) => (
                           <button
                             key={language}
-                            onClick={() => setPreferredLanguage(language)}
+                            onClick={() => {
+                              playTap();
+                              setPreferredLanguage(language);
+                            }}
                             data-active={preferredLanguage === language}
                             className="editorial-language-tab rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition-colors"
                           >
@@ -1206,7 +1569,7 @@ export default function Home() {
 
                           <div className="grid gap-4 md:grid-cols-2">
                             <div className="rounded-[1.75rem] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.72)] p-6">
-                              <p className="editorial-caption">Example</p>
+                              <p className="editorial-caption">{ui.example}</p>
                               <p className="mt-3 text-base italic text-[var(--editorial-ink)]">
                                 &quot;{activeVariant.example || result.sentence}&quot;
                               </p>
@@ -1215,7 +1578,7 @@ export default function Home() {
                               </p>
                             </div>
                             <div className="rounded-[1.75rem] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.72)] p-6">
-                              <p className="editorial-caption">Pronunciation & usage</p>
+                              <p className="editorial-caption">{ui.pronunciation}</p>
                               <p className="mt-3 text-sm leading-7 text-[var(--editorial-ink)]">
                                 {activeVariant.pronunciationTip}
                               </p>
@@ -1227,7 +1590,7 @@ export default function Home() {
 
                           <div className="grid gap-4 md:grid-cols-[0.75fr_1.25fr]">
                             <div className="rounded-[1.75rem] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.72)] p-6">
-                              <p className="editorial-caption">Related forms</p>
+                              <p className="editorial-caption">{ui.related}</p>
                               <div className="mt-4 flex flex-wrap gap-2">
                                 {(activeVariant.relatedForms.length > 0 ? activeVariant.relatedForms : [activeVariant.term || result.word]).map((form) => (
                                   <span key={form} className="rounded-full border border-[var(--editorial-border)] px-3 py-2 text-xs uppercase tracking-[0.16em] text-[var(--editorial-muted)]">
@@ -1237,7 +1600,7 @@ export default function Home() {
                               </div>
                             </div>
                             <div className="rounded-[1.75rem] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.72)] p-6">
-                              <p className="editorial-caption">Culture note</p>
+                              <p className="editorial-caption">{ui.culture}</p>
                               <p className="mt-3 text-sm leading-7 text-[var(--editorial-muted)]">
                                 {activeVariant.cultureNote}
                               </p>
@@ -1249,12 +1612,13 @@ export default function Home() {
                       <div className="h-px w-full bg-[var(--editorial-border)]" />
                       <button
                         onClick={() => {
+                          playTap();
                           setCurrentImage(null);
                           setResult(null);
                         }}
                         className="w-full rounded-full bg-[var(--editorial-ink)] px-6 py-4 font-semibold text-[var(--editorial-paper)] transition-all hover:opacity-92"
                       >
-                        继续学习
+                        {ui.continueLearning}
                       </button>
                     </div>
                   </div>
@@ -1267,11 +1631,11 @@ export default function Home() {
           {activeTab === 'history' && editingItem && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
               <div className="w-full max-w-md rounded-[2rem] border border-[var(--editorial-border)] bg-[var(--editorial-paper)] p-6 shadow-xl">
-                <p className="editorial-kicker">Archive edit</p>
-                <h3 className="editorial-serif mb-5 mt-3 text-3xl font-semibold tracking-[-0.04em]">编辑单词</h3>
+                <p className="editorial-kicker">{locale === 'en' ? 'Archive edit' : '档案编辑'}</p>
+                <h3 className="editorial-serif mb-5 mt-3 text-3xl font-semibold tracking-[-0.04em]">{ui.editWord}</h3>
                 <div className="space-y-4">
                   <div>
-                    <label className="mb-2 block text-xs font-medium uppercase tracking-[0.18em] text-[var(--editorial-muted)]">单词</label>
+                    <label className="mb-2 block text-xs font-medium uppercase tracking-[0.18em] text-[var(--editorial-muted)]">{locale === 'en' ? 'Word' : '单词'}</label>
                     <input
                       value={editingItem.word}
                       onChange={e => setEditingItem({ ...editingItem, word: e.target.value })}
@@ -1279,7 +1643,7 @@ export default function Home() {
                     />
                   </div>
                   <div>
-                    <label className="mb-2 block text-xs font-medium uppercase tracking-[0.18em] text-[var(--editorial-muted)]">音标</label>
+                    <label className="mb-2 block text-xs font-medium uppercase tracking-[0.18em] text-[var(--editorial-muted)]">{locale === 'en' ? 'Phonetic' : '音标'}</label>
                     <input
                       value={editingItem.phonetic}
                       onChange={e => setEditingItem({ ...editingItem, phonetic: e.target.value })}
@@ -1287,7 +1651,7 @@ export default function Home() {
                     />
                   </div>
                   <div>
-                    <label className="mb-2 block text-xs font-medium uppercase tracking-[0.18em] text-[var(--editorial-muted)]">释义</label>
+                    <label className="mb-2 block text-xs font-medium uppercase tracking-[0.18em] text-[var(--editorial-muted)]">{locale === 'en' ? 'Meaning' : '释义'}</label>
                     <input
                       value={editingItem.meaning}
                       onChange={e => setEditingItem({ ...editingItem, meaning: e.target.value })}
@@ -1295,7 +1659,7 @@ export default function Home() {
                     />
                   </div>
                   <div>
-                    <label className="mb-2 block text-xs font-medium uppercase tracking-[0.18em] text-[var(--editorial-muted)]">例句</label>
+                    <label className="mb-2 block text-xs font-medium uppercase tracking-[0.18em] text-[var(--editorial-muted)]">{locale === 'en' ? 'Example sentence' : '例句'}</label>
                     <textarea
                       value={editingItem.sentence}
                       onChange={e => setEditingItem({ ...editingItem, sentence: e.target.value })}
@@ -1304,7 +1668,7 @@ export default function Home() {
                     />
                   </div>
                   <div>
-                    <label className="mb-2 block text-xs font-medium uppercase tracking-[0.18em] text-[var(--editorial-muted)]">例句翻译</label>
+                    <label className="mb-2 block text-xs font-medium uppercase tracking-[0.18em] text-[var(--editorial-muted)]">{locale === 'en' ? 'Example translation' : '例句翻译'}</label>
                     <textarea
                       value={editingItem.sentence_cn}
                       onChange={e => setEditingItem({ ...editingItem, sentence_cn: e.target.value })}
@@ -1318,13 +1682,13 @@ export default function Home() {
                     onClick={() => setEditingItem(null)}
                     className="flex-1 rounded-2xl border border-[var(--editorial-border)] bg-[var(--editorial-panel)] px-4 py-3 font-medium text-[var(--editorial-muted)]"
                   >
-                    取消
+                    {ui.cancel}
                   </button>
                   <button
                     onClick={() => saveEdit(editingItem)}
                     className="flex-1 rounded-2xl bg-[var(--editorial-accent)] px-4 py-3 font-bold text-black"
                   >
-                    保存
+                    {ui.save}
                   </button>
                 </div>
               </div>
@@ -1335,15 +1699,15 @@ export default function Home() {
           {activeTab === 'history' && itemToDelete && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setItemToDelete(null)}>
               <div className="w-full max-w-sm rounded-[2rem] border border-[var(--editorial-border)] bg-[var(--editorial-paper)] p-6 shadow-xl" onClick={e => e.stopPropagation()}>
-                <p className="editorial-kicker">Danger zone</p>
-                <h3 className="editorial-serif mb-3 mt-3 text-3xl font-semibold tracking-[-0.04em]">确认删除</h3>
-                <p className="mb-6 text-sm leading-7 text-[var(--editorial-muted)]">确定要删除单词 &quot;{itemToDelete.word}&quot; 吗？此操作无法撤销。</p>
+                <p className="editorial-kicker">{locale === 'en' ? 'Danger zone' : '危险操作'}</p>
+                <h3 className="editorial-serif mb-3 mt-3 text-3xl font-semibold tracking-[-0.04em]">{ui.deleteTitle}</h3>
+                <p className="mb-6 text-sm leading-7 text-[var(--editorial-muted)]">{ui.deleteBody(itemToDelete.word)}</p>
                 <div className="flex gap-3">
                   <button
                     onClick={() => setItemToDelete(null)}
                     className="flex-1 rounded-2xl border border-[var(--editorial-border)] bg-[var(--editorial-panel)] px-4 py-3 font-medium text-[var(--editorial-muted)]"
                   >
-                    取消
+                    {ui.cancel}
                   </button>
                   <button
                     onClick={() => {
@@ -1352,7 +1716,7 @@ export default function Home() {
                     }}
                     className="flex-1 rounded-2xl bg-red-500 px-4 py-3 font-bold text-white transition-colors hover:bg-red-600"
                   >
-                    删除
+                    {ui.delete}
                   </button>
                 </div>
               </div>
@@ -1363,14 +1727,17 @@ export default function Home() {
           {activeTab === 'history' && (
             <PageTransition key="history" className="space-y-6">
               <div className="editorial-panel p-6 sm:p-8">
-                <p className="editorial-kicker">Language archive</p>
-                <h2 className="editorial-serif mt-4 text-4xl font-semibold tracking-[-0.04em] sm:text-5xl">{LANGUAGE_LABELS[preferredLanguage]} 语言库</h2>
-                <p className="mt-3 text-sm text-[var(--editorial-muted)]">{filteredHistory.length} 条记录，按图像、语言和日期归档。</p>
+                <p className="editorial-kicker">{ui.archive}</p>
+                <h2 className="editorial-serif mt-4 text-4xl font-semibold tracking-[-0.04em] sm:text-5xl">{ui.historyTitle(LANGUAGE_LABELS[preferredLanguage])}</h2>
+                <p className="mt-3 text-sm text-[var(--editorial-muted)]">{ui.historyCount(filteredHistory.length)}</p>
                 <div className="mt-5 flex flex-wrap gap-2">
                   {SUPPORTED_LANGUAGE_CODES.map((language) => (
                     <button
                       key={language}
-                      onClick={() => setPreferredLanguage(language)}
+                      onClick={() => {
+                        playTap();
+                        setPreferredLanguage(language);
+                      }}
                       data-active={preferredLanguage === language}
                       className="editorial-language-tab rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em]"
                     >
@@ -1439,7 +1806,7 @@ export default function Home() {
                             {LANGUAGE_LABELS[preferredLanguage]}
                           </span>
                         <p className="mt-3 text-xs uppercase tracking-[0.2em] text-[var(--editorial-muted)]">
-                          {new Date(item.timestamp).toLocaleDateString('zh-CN')}
+                          {new Date(item.timestamp).toLocaleDateString(locale === 'en' ? 'en-US' : 'zh-CN')}
                         </p>
                         </div>
                       </div>
@@ -1453,8 +1820,8 @@ export default function Home() {
                     alt="Empty State"
                     className="w-48 h-48 mx-auto mb-6 opacity-80 image-soften"
                   />
-                  <p className="text-[var(--editorial-muted)]">还没有学习记录</p>
-                  <p className="mt-2 text-sm text-[var(--editorial-muted)]">从首页上传一张图，先建立第一条 {LANGUAGE_LABELS[preferredLanguage]} 档案。</p>
+                  <p className="text-[var(--editorial-muted)]">{ui.noHistory}</p>
+                  <p className="mt-2 text-sm text-[var(--editorial-muted)]">{ui.noHistoryHint(LANGUAGE_LABELS[preferredLanguage])}</p>
                 </div>
               )}
             </PageTransition>
@@ -1465,8 +1832,8 @@ export default function Home() {
             <PageTransition key="stats" className="space-y-6">
               <div className="editorial-panel p-6 sm:p-8">
                 <p className="editorial-kicker">Metrics</p>
-                <h2 className="editorial-serif mt-4 text-4xl font-semibold tracking-[-0.04em] sm:text-5xl">学习统计</h2>
-                <p className="mt-3 text-sm text-[var(--editorial-muted)]">用更接近编辑年鉴的方式看你的学习密度。</p>
+                <h2 className="editorial-serif mt-4 text-4xl font-semibold tracking-[-0.04em] sm:text-5xl">{ui.statsTitle}</h2>
+                <p className="mt-3 text-sm text-[var(--editorial-muted)]">{ui.statsBody}</p>
               </div>
 
               <div className="space-y-4">
@@ -1479,7 +1846,7 @@ export default function Home() {
                   <div className="text-center relative z-10">
                     <div className="editorial-caption">Archive volume</div>
                     <div className="mt-3 text-6xl font-semibold text-[var(--editorial-accent)]">{stats.total}</div>
-                    <div className="mt-2 text-lg font-medium">累计学习单词</div>
+                    <div className="mt-2 text-lg font-medium">{ui.totalStudied}</div>
                   </div>
                 </div>
 
@@ -1487,22 +1854,22 @@ export default function Home() {
                   <div className="editorial-panel p-6">
                     <div className="text-center">
                       <div className="text-4xl font-semibold mb-2">{stats.today}</div>
-                      <div className="text-sm text-[var(--editorial-muted)]">今日学习</div>
+                      <div className="text-sm text-[var(--editorial-muted)]">{ui.studiedToday}</div>
                     </div>
                   </div>
                   <div className="editorial-panel p-6">
                     <div className="text-center">
                       <div className="text-4xl font-semibold mb-2">{stats.thisWeek}</div>
-                      <div className="text-sm text-[var(--editorial-muted)]">本周学习</div>
+                      <div className="text-sm text-[var(--editorial-muted)]">{ui.studiedWeek}</div>
                     </div>
                   </div>
                 </div>
 
                 <div className="editorial-panel p-6">
-                  <h3 className="editorial-serif mb-4 text-2xl font-semibold">学习趋势</h3>
+                  <h3 className="editorial-serif mb-4 text-2xl font-semibold">{ui.trend}</h3>
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-[var(--editorial-muted)]">日均学习</span>
+                      <span className="text-sm text-[var(--editorial-muted)]">{ui.averageDaily}</span>
                       <span className="text-lg font-semibold">
                         {stats.total > 0 ? Math.round(stats.total / 7) : 0}
                       </span>
@@ -1524,11 +1891,11 @@ export default function Home() {
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
               <div className="w-full max-w-sm rounded-[2rem] border border-[var(--editorial-border)] bg-[var(--editorial-paper)] p-6 shadow-xl">
                 <p className="editorial-kicker">Profile edit</p>
-                <h3 className="editorial-serif mb-4 mt-3 text-3xl font-semibold tracking-[-0.04em]">修改昵称</h3>
+                <h3 className="editorial-serif mb-4 mt-3 text-3xl font-semibold tracking-[-0.04em]">{ui.editName}</h3>
                 <input
                   value={newName}
                   onChange={e => setNewName(e.target.value)}
-                  placeholder="输入新名字"
+                  placeholder={locale === 'en' ? 'Enter a new name' : '输入新名字'}
                   className="mb-6 w-full rounded-2xl border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.7)] p-3 text-[var(--editorial-ink)] outline-none transition-all focus:border-[var(--editorial-accent)]"
                 />
                 <div className="flex gap-3">
@@ -1536,13 +1903,13 @@ export default function Home() {
                     onClick={() => setIsEditingName(false)}
                     className="flex-1 rounded-2xl border border-[var(--editorial-border)] bg-[var(--editorial-panel)] px-4 py-3 font-medium text-[var(--editorial-muted)]"
                   >
-                    取消
+                    {ui.cancel}
                   </button>
                   <button
                     onClick={handleUpdateName}
                     className="flex-1 rounded-2xl bg-[var(--editorial-accent)] px-4 py-3 font-bold text-black"
                   >
-                    保存
+                    {ui.save}
                   </button>
                 </div>
               </div>
@@ -1553,21 +1920,21 @@ export default function Home() {
           {activeTab === 'profile' && showAbout && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setShowAbout(false)}>
               <div className="w-full max-w-sm rounded-[2rem] border border-[var(--editorial-border)] bg-[var(--editorial-paper)] p-8 text-center shadow-xl" onClick={e => e.stopPropagation()}>
-                <img src="/logo-compact.png" alt="Logo" className="mx-auto mb-4 h-20 w-20 rounded-[1.5rem] shadow-md" />
-                <p className="editorial-kicker">App note</p>
+                  <img src="/logo-compact.png" alt="Logo" className="mx-auto mb-4 h-20 w-20 rounded-[1.5rem] shadow-md" />
+                <p className="editorial-kicker">{locale === 'en' ? 'App note' : '应用说明'}</p>
                 <h3 className="editorial-serif mb-2 mt-3 text-3xl font-semibold tracking-[-0.04em]">Snapshot</h3>
-                <p className="mb-6 text-sm text-[var(--editorial-muted)]">Version 1.0.0</p>
+                <p className="mb-6 text-sm text-[var(--editorial-muted)]">{ui.appVersion}</p>
                 <div className="mb-8 rounded-[1.5rem] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.72)] p-4 text-left text-sm leading-7 text-[var(--editorial-muted)]">
-                  <p>📸 拍照识别单词</p>
-                  <p>🧠 AI 智能解析</p>
-                  <p>📊 学习进度追踪</p>
+                  <p>📸 {ui.aboutSummary1}</p>
+                  <p>🧠 {ui.aboutSummary2}</p>
+                  <p>📊 {ui.aboutSummary3}</p>
                   <p>✦ Editorial learning desk</p>
                 </div>
                 <button
                   onClick={() => setShowAbout(false)}
                   className="w-full rounded-2xl bg-[var(--editorial-ink)] px-4 py-3 font-bold text-[var(--editorial-paper)]"
                 >
-                  关闭
+                  {ui.close}
                 </button>
               </div>
             </div>
@@ -1597,12 +1964,12 @@ export default function Home() {
                     </button>
                   </div>
                   <div>
-                    <p className="editorial-kicker mb-2">Profile</p>
+                    <p className="editorial-kicker mb-2">{ui.profile}</p>
                     <h2 className="editorial-serif text-3xl font-semibold">
-                      {user?.firstName || user?.fullName || '学习者'}
+                      {user?.firstName || user?.fullName || (locale === 'en' ? 'Learner' : '学习者')}
                     </h2>
                     <p className="text-sm text-[var(--editorial-muted)]">
-                      {user?.primaryEmailAddress?.emailAddress || '持续进步中'}
+                      {user?.primaryEmailAddress?.emailAddress || (locale === 'en' ? 'In steady progress' : '持续进步中')}
                     </p>
                   </div>
                 </div>
@@ -1610,27 +1977,30 @@ export default function Home() {
                 <div className="grid grid-cols-3 gap-4 rounded-[1.75rem] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.7)] p-4">
                   <div className="text-center">
                     <div className="text-2xl font-semibold">{stats.total}</div>
-                    <div className="mt-1 text-xs text-[var(--editorial-muted)]">总词汇</div>
+                    <div className="mt-1 text-xs text-[var(--editorial-muted)]">{ui.totalWords}</div>
                   </div>
                   <div className="text-center">
                     <div className="text-2xl font-semibold">{stats.thisWeek}</div>
-                    <div className="mt-1 text-xs text-[var(--editorial-muted)]">本周</div>
+                    <div className="mt-1 text-xs text-[var(--editorial-muted)]">{ui.weekWords}</div>
                   </div>
                   <div className="text-center">
                     <div className="text-2xl font-semibold">{stats.today}</div>
-                    <div className="mt-1 text-xs text-[var(--editorial-muted)]">今日</div>
+                    <div className="mt-1 text-xs text-[var(--editorial-muted)]">{ui.todayWords}</div>
                   </div>
                 </div>
               </div>
 
                 <div className="space-y-3">
                   <div className="editorial-panel p-5">
-                    <p className="editorial-caption">Primary study language</p>
+                    <p className="editorial-caption">{ui.primaryLanguage}</p>
                     <div className="mt-4 flex flex-wrap gap-2">
                       {SUPPORTED_LANGUAGE_CODES.map((language) => (
                         <button
                           key={language}
-                          onClick={() => setPreferredLanguage(language)}
+                          onClick={() => {
+                            playTap();
+                            setPreferredLanguage(language);
+                          }}
                           data-active={preferredLanguage === language}
                           className="editorial-language-tab rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em]"
                         >
@@ -1639,7 +2009,52 @@ export default function Home() {
                       ))}
                     </div>
                     <p className="mt-3 text-sm leading-7 text-[var(--editorial-muted)]">
-                      识图结果、历史语言库和默认保存语言都会优先跟随这个设置。更多语言，敬请期待。
+                      {locale === 'en'
+                        ? 'The result screen opens in this language first, and the archive view follows it by default.'
+                        : '识图结果、历史语言库和默认展示语言都会优先跟随这个设置。'}
+                    </p>
+                  </div>
+
+                  <div className="editorial-panel p-5">
+                    <p className="editorial-caption">{ui.targetLibraries}</p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {SUPPORTED_LANGUAGE_CODES.map((language) => (
+                        <button
+                          key={language}
+                          type="button"
+                          onClick={() => toggleTargetLanguage(language)}
+                          data-active={targetLanguages.includes(language)}
+                          className="editorial-language-tab rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em]"
+                        >
+                          {LANGUAGE_LABELS[language]}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="mt-3 text-sm leading-7 text-[var(--editorial-muted)]">
+                      {ui.targetLibrariesHint}
+                    </p>
+                  </div>
+
+                  <div className="editorial-panel p-5">
+                    <p className="editorial-caption">{ui.appLanguage}</p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {(['zh-CN', 'en'] as const).map((option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          onClick={() => {
+                            playTap();
+                            setLocale(option);
+                          }}
+                          data-active={locale === option}
+                          className="editorial-language-tab rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em]"
+                        >
+                          {option === 'zh-CN' ? '中文' : 'English'}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="mt-3 text-sm leading-7 text-[var(--editorial-muted)]">
+                      {ui.appLanguageHint}
                     </p>
                   </div>
 
@@ -1649,36 +2064,42 @@ export default function Home() {
                   <div className="editorial-panel p-5">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="editorial-caption">Membership</p>
-                        <p className="editorial-serif mt-2 text-2xl font-semibold">会员与额度</p>
+                        <p className="editorial-caption">{ui.membership}</p>
+                        <p className="editorial-serif mt-2 text-2xl font-semibold">{ui.membership}</p>
                         <p className="mt-2 text-sm leading-7 text-[var(--editorial-muted)]">
                           {billing.subscriptionStatus === 'free'
-                            ? `当前是免费层，剩余 ${billing.remaining}/${billing.monthlyLimit} 次识图额度`
-                            : `状态：${billing.subscriptionStatus}，剩余 ${billing.remaining}/${billing.monthlyLimit}`}
+                            ? ui.freeStatus(billing.remaining, billing.monthlyLimit)
+                            : (locale === 'en'
+                              ? `Status: ${billing.subscriptionStatus}. ${billing.remaining}/${billing.monthlyLimit} left.`
+                              : `状态：${billing.subscriptionStatus}，剩余 ${billing.remaining}/${billing.monthlyLimit}`)}
                         </p>
                         {billing.trialEndsAt && (
                           <p className="mt-1 text-xs text-[var(--editorial-muted)]">
-                            试用结束：{new Date(billing.trialEndsAt).toLocaleString('zh-CN')}
+                            {locale === 'en' ? 'Trial ends: ' : '试用结束：'}{new Date(billing.trialEndsAt).toLocaleString(locale === 'en' ? 'en-US' : 'zh-CN')}
                           </p>
                         )}
                       </div>
                       <button
                         onClick={() => {
+                          playTap();
                           setShowBillingDrawer(true);
                           void trackClientEvent('billing_cta_clicked', { location: 'profile_card' });
                         }}
                         className="rounded-full bg-[var(--editorial-ink)] px-4 py-2 text-xs font-semibold text-[var(--editorial-paper)]"
                       >
-                        {billing.subscriptionStatus === 'free' ? '升级' : '查看'}
+                        {billing.subscriptionStatus === 'free' ? ui.billingUpgrade : ui.billingView}
                       </button>
                     </div>
                   </div>
                 )}
 
                 <div className="editorial-panel flex items-center justify-between p-5">
-                  <span className="font-medium">深色模式</span>
+                  <span className="font-medium">{ui.darkMode}</span>
                   <button
-                    onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+                    onClick={() => {
+                      playTap();
+                      setTheme(resolvedTheme === 'dark' ? 'light' : 'dark');
+                    }}
                     className={`relative h-6 w-11 rounded-full transition-colors ${resolvedTheme === 'dark' ? 'bg-[var(--editorial-accent)]' : 'bg-gray-200'}`}
                   >
                     <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-all ${resolvedTheme === 'dark' ? 'left-6' : 'left-1'}`}></div>
@@ -1686,12 +2107,29 @@ export default function Home() {
                 </div>
 
                 <button
-                  onClick={() => setShowAbout(true)}
+                  onClick={() => {
+                    playTap();
+                    setShowAbout(true);
+                  }}
                   className="editorial-panel flex w-full items-center justify-between p-5 text-left transition-colors duration-300"
                 >
-                  <span className="font-medium">关于应用</span>
+                  <span className="font-medium">{ui.about}</span>
                   <span className="text-[var(--editorial-muted)]">{"›"}</span>
                 </button>
+
+                <SignOutButton>
+                  <button
+                    type="button"
+                    onClick={playTap}
+                    className="editorial-panel w-full p-5 text-left transition-colors duration-300"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium">{ui.signOut}</span>
+                      <span className="text-[var(--editorial-muted)]">{"›"}</span>
+                    </div>
+                    <p className="mt-2 text-sm leading-7 text-[var(--editorial-muted)]">{ui.signOutHint}</p>
+                  </button>
+                </SignOutButton>
               </div>
 
             </PageTransition>
@@ -1706,6 +2144,7 @@ export default function Home() {
             <button
               onClick={() => {
                 setActiveTab('home');
+                playTap();
                 impact(ImpactStyle.Light);
               }}
               className={`flex flex-col items-center gap-1 rounded-2xl px-6 py-2 transition-all ${activeTab === 'home'
@@ -1714,12 +2153,13 @@ export default function Home() {
                 }`}
             >
               <HomeIcon className={`h-6 w-6 ${activeTab === 'home' ? 'fill-[var(--editorial-accent)]' : ''}`} />
-              <span className="text-xs font-medium">主页</span>
+              <span className="text-xs font-medium">{ui.home}</span>
             </button>
 
             <button
               onClick={() => {
                 setActiveTab('history');
+                playTap();
                 impact(ImpactStyle.Light);
               }}
               className={`flex flex-col items-center gap-1 rounded-2xl px-6 py-2 transition-all ${activeTab === 'history'
@@ -1728,12 +2168,13 @@ export default function Home() {
                 }`}
             >
               <BookOpen className={`h-6 w-6 ${activeTab === 'history' ? 'fill-[var(--editorial-accent)]' : ''}`} />
-              <span className="text-xs font-medium">记录</span>
+              <span className="text-xs font-medium">{ui.history}</span>
             </button>
 
             <button
               onClick={() => {
                 setActiveTab('stats');
+                playTap();
                 impact(ImpactStyle.Light);
               }}
               className={`flex flex-col items-center gap-1 rounded-2xl px-6 py-2 transition-all ${activeTab === 'stats'
@@ -1742,12 +2183,13 @@ export default function Home() {
                 }`}
             >
               <BarChart3 className={`h-6 w-6 ${activeTab === 'stats' ? 'fill-[var(--editorial-accent)]' : ''}`} />
-              <span className="text-xs font-medium">统计</span>
+              <span className="text-xs font-medium">{ui.stats}</span>
             </button>
 
             <button
               onClick={() => {
                 setActiveTab('profile');
+                playTap();
                 impact(ImpactStyle.Light);
               }}
               className={`flex flex-col items-center gap-1 rounded-2xl px-6 py-2 transition-all ${activeTab === 'profile'
@@ -1756,7 +2198,7 @@ export default function Home() {
                 }`}
             >
               <UserIcon className={`h-6 w-6 ${activeTab === 'profile' ? 'fill-[var(--editorial-accent)]' : ''}`} />
-              <span className="text-xs font-medium">我的</span>
+              <span className="text-xs font-medium">{ui.me}</span>
             </button>
           </div>
         </div>

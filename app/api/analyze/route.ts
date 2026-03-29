@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as Sentry from '@sentry/nextjs';
 import { z } from 'zod';
-import { getEnrichedWordData } from '@/lib/mcp/tools';
 import { fetchWithKeyRotation } from '@/lib/gemini';
 import { enforceRateLimit } from '@/lib/rate-limit';
 import { consumeAnalyzeCredit, getBillingStatus } from '@/lib/billing';
 import { requireDbUser } from '@/lib/users';
 import { trackServerEvent } from '@/lib/analytics';
-import { buildFallbackVariants, normalizeLanguageCode, type AnalyzeVariants, type LanguageCode } from '@/lib/language-content';
-import { generateLanguageVariants } from '@/lib/text-generation';
+import { buildFallbackVariants, normalizeLanguageCode, type LanguageCode } from '@/lib/language-content';
 
 const analyzeSchema = z.object({
     imageUrl: z.string().min(1, 'imageUrl is required'),
@@ -172,32 +170,15 @@ export async function POST(req: NextRequest) {
         console.log(`[Analyze] Successfully analyzed: ${result.word}`);
         await consumeAnalyzeCredit(user.id);
 
-        let languagePack: AnalyzeVariants;
-        try {
-            languagePack = await generateLanguageVariants({
-                sourceObject: result.sourceObject,
-                sourceLabelEn: result.sourceLabelEn,
-                word: result.word,
-                phonetic: result.phonetic,
-                meaning: result.meaning,
-                sentence: result.sentence,
-                sentenceCn: result.sentence_cn,
-            });
-        } catch (languageError) {
-            console.error('[Analyze] Language generation fallback:', languageError);
-            languagePack = buildFallbackVariants({
-                sourceObject: result.sourceObject,
-                sourceLabelEn: result.sourceLabelEn,
-                word: result.word,
-                phonetic: result.phonetic,
-                meaning: result.meaning,
-                sentence: result.sentence,
-                sentenceCn: result.sentence_cn,
-            });
-        }
-
-        // 使用 MCP 获取富化数据
-        const enrichedData = await getEnrichedWordData(result.word);
+        const languagePack = buildFallbackVariants({
+            sourceObject: result.sourceObject,
+            sourceLabelEn: result.sourceLabelEn,
+            word: result.word,
+            phonetic: result.phonetic,
+            meaning: result.meaning,
+            sentence: result.sentence,
+            sentenceCn: result.sentence_cn,
+        });
         await trackServerEvent('analyze_succeeded', {
             word: result.word,
             subscriptionStatus: billingStatus.subscriptionStatus,
@@ -211,7 +192,7 @@ export async function POST(req: NextRequest) {
             primaryLanguage: normalizeLanguageCode('en') satisfies LanguageCode,
             availableLanguages: languagePack.availableLanguages,
             variants: languagePack.variants,
-            mcp: enrichedData
+            enhancementPending: true,
         });
 
     } catch (error) {

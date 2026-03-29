@@ -24,6 +24,14 @@ export const metadata: Metadata = {
   title: "Snapshot - AI 学英语",
   description: "Your AI-powered language learning companion",
   manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "32x32" },
+      { url: "/icon", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-icon", sizes: "180x180" }],
+    shortcut: ["/favicon.ico"],
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
