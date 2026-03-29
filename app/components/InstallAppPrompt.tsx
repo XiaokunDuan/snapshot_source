@@ -22,8 +22,15 @@ function isStandaloneDisplay() {
 export function InstallAppPrompt({ enabled }: { enabled: boolean }) {
   const copy = useMessages();
   const [open, setOpen] = useState(false);
-  const [iosOnly, setIosOnly] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<DeferredInstallPromptEvent | null>(null);
+  const isIosMobile = useMemo(() => {
+    if (typeof window === 'undefined') {
+      return false;
+    }
+
+    const userAgent = window.navigator.userAgent.toLowerCase();
+    return /iphone|ipad|ipod/.test(userAgent);
+  }, []);
 
   const canShow = useMemo(() => {
     if (typeof window === 'undefined') {
@@ -44,14 +51,12 @@ export function InstallAppPrompt({ enabled }: { enabled: boolean }) {
 
     const userAgent = window.navigator.userAgent.toLowerCase();
     const isMobile = /iphone|ipad|ipod|android/.test(userAgent);
-    const isIos = /iphone|ipad|ipod/.test(userAgent);
 
     if (!isMobile) {
       return;
     }
 
-    if (isIos) {
-      setIosOnly(true);
+    if (isIosMobile) {
       const timer = window.setTimeout(() => setOpen(true), 1400);
       return () => window.clearTimeout(timer);
     }
@@ -66,7 +71,7 @@ export function InstallAppPrompt({ enabled }: { enabled: boolean }) {
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     };
-  }, [canShow]);
+  }, [canShow, isIosMobile]);
 
   const dismiss = () => {
     if (typeof window !== 'undefined') {
@@ -76,7 +81,7 @@ export function InstallAppPrompt({ enabled }: { enabled: boolean }) {
   };
 
   const handleInstall = async () => {
-    if (iosOnly || !deferredPrompt) {
+    if (isIosMobile || !deferredPrompt) {
       dismiss();
       return;
     }
@@ -98,7 +103,7 @@ export function InstallAppPrompt({ enabled }: { enabled: boolean }) {
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="flex h-12 w-12 items-center justify-center rounded-full border border-[var(--editorial-border)] bg-[rgba(149,199,85,0.12)]">
-              {iosOnly ? <Share2 className="h-5 w-5 text-[var(--editorial-accent)]" /> : <Download className="h-5 w-5 text-[var(--editorial-accent)]" />}
+              {isIosMobile ? <Share2 className="h-5 w-5 text-[var(--editorial-accent)]" /> : <Download className="h-5 w-5 text-[var(--editorial-accent)]" />}
             </div>
             <div>
               <p className="editorial-kicker">Mobile install</p>
@@ -112,7 +117,7 @@ export function InstallAppPrompt({ enabled }: { enabled: boolean }) {
 
         <p className="mt-4 text-sm leading-7 text-[var(--editorial-muted)]">{copy.install.subtitle}</p>
 
-        {iosOnly ? (
+        {isIosMobile ? (
           <div className="mt-5 rounded-[1.5rem] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.72)] p-4">
             <div className="flex items-center gap-2 text-sm font-medium text-[var(--editorial-ink)]">
               <Smartphone className="h-4 w-4 text-[var(--editorial-accent)]" />
