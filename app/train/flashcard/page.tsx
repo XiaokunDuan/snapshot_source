@@ -1,10 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Volume2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Volume2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { normalizeLanguageCode, type LanguageCode } from '@/lib/language-content';
 
 interface WordCard {
+    id: string;
+    language: LanguageCode;
     word: string;
     phonetic: string;
     meaning: string;
@@ -12,24 +15,106 @@ interface WordCard {
     sentence_cn: string;
 }
 
-// Sample words - in production, fetch from API
-const SAMPLE_WORDS: WordCard[] = [
-    { word: 'swear', phonetic: '/swer/', meaning: '发誓；咒骂', sentence: 'I swear I will never lie to you.', sentence_cn: '我发誓我永远不会对你撒谎。' },
-    { word: 'achieve', phonetic: '/əˈtʃiːv/', meaning: '实现；达到', sentence: 'She achieved her goal of becoming a doctor.', sentence_cn: '她实现了成为医生的目标。' },
-    { word: 'inspire', phonetic: '/ɪnˈspaɪər/', meaning: '鼓舞；激发', sentence: 'Her story inspired me to work harder.', sentence_cn: '她的故事激励我更加努力工作。' },
-];
+const PRIMARY_LANGUAGE_KEY = 'snapshot_primary_language';
+
+type HistoryResponseItem = {
+    id?: number | string;
+    word?: string;
+    phonetic?: string;
+    meaning?: string;
+    sentence?: string;
+    sentence_cn?: string;
+    primaryLanguage?: string;
+    variants?: Record<string, {
+        term?: string;
+        phonetic?: string;
+        meaning?: string;
+        example?: string;
+        exampleTranslation?: string;
+    }>;
+};
 
 export default function FlashcardTraining() {
     const router = useRouter();
+    const [cards, setCards] = useState<WordCard[]>([]);
     const [currentCard, setCurrentCard] = useState<WordCard | null>(null);
     const [cardIndex, setCardIndex] = useState(0);
-    const totalCards = SAMPLE_WORDS.length;
     const [knownCount, setKnownCount] = useState(0);
     const [unknownCount, setUnknownCount] = useState(0);
+    const [isLoading, setIsLoading] = useState(true);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const totalCards = cards.length;
 
     useEffect(() => {
-        setCurrentCard(SAMPLE_WORDS[cardIndex]);
-    }, [cardIndex]);
+        if (cards.length === 0) {
+            setCurrentCard(null);
+            return;
+        }
+
+        setCurrentCard(cards[cardIndex] ?? null);
+    }, [cardIndex, cards]);
+
+    useEffect(() => {
+        const loadCards = async () => {
+            try {
+                setIsLoading(true);
+                setErrorMessage(null);
+
+                const storedLanguage = typeof window !== 'undefined'
+                    ? normalizeLanguageCode(window.localStorage.getItem(PRIMARY_LANGUAGE_KEY) ?? window.navigator.language)
+                    : 'en';
+
+                const response = await fetch('/api/history');
+                const rawText = await response.text();
+                const payload = rawText ? JSON.parse(rawText) : [];
+
+                if (!response.ok) {
+                    throw new Error(
+                        (payload as { error?: string; details?: string }).details
+                        || (payload as { error?: string }).error
+                        || 'Failed to load flashcards'
+                    );
+                }
+
+                const historyItems = Array.isArray(payload) ? payload as HistoryResponseItem[] : [];
+                const nextCards = historyItems
+                    .map((item) => {
+                        const fallbackLanguage = normalizeLanguageCode(item.primaryLanguage ?? storedLanguage);
+                        const variant = item.variants?.[storedLanguage] ?? item.variants?.[fallbackLanguage];
+                        const word = variant?.term || item.word || '';
+                        const meaning = variant?.meaning || item.meaning || '';
+
+                        if (!word || !meaning) {
+                            return null;
+                        }
+
+                        return {
+                            id: String(item.id ?? `${fallbackLanguage}-${word}`),
+                            language: storedLanguage,
+                            word,
+                            phonetic: variant?.phonetic || item.phonetic || '',
+                            meaning,
+                            sentence: variant?.example || item.sentence || '',
+                            sentence_cn: variant?.exampleTranslation || item.sentence_cn || '',
+                        } satisfies WordCard;
+                    })
+                    .filter((item): item is WordCard => Boolean(item));
+
+                setCards(nextCards);
+                setCardIndex(0);
+                setKnownCount(0);
+                setUnknownCount(0);
+            } catch (error) {
+                console.error('Load flashcards error:', error);
+                setErrorMessage(error instanceof Error ? error.message : 'Failed to load flashcards');
+                setCards([]);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        void loadCards();
+    }, []);
 
     const handleKnown = () => {
         const nextKnownCount = knownCount + 1;
@@ -44,13 +129,60 @@ export default function FlashcardTraining() {
     };
 
     const nextCard = (finalKnownCount: number, finalUnknownCount: number) => {
-        if (cardIndex < SAMPLE_WORDS.length - 1) {
+        if (cardIndex < cards.length - 1) {
             setCardIndex(prev => prev + 1);
         } else {
             alert(`训练完成！\n记得: ${finalKnownCount}\n不记得: ${finalUnknownCount}`);
             router.push('/');
         }
     };
+
+    if (isLoading) {
+        return (
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <div className="flex items-center gap-3 text-gray-600">
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Loading flashcards...</span>
+                </div>
+            </div>
+        );
+    }
+
+    if (errorMessage) {
+        return (
+            <div className="min-h-screen bg-gray-50 px-4 py-12">
+                <div className="max-w-xl mx-auto rounded-3xl bg-white p-8 shadow-sm text-center">
+                    <h1 className="text-3xl font-semibold text-gray-900">Unable to load flashcards</h1>
+                    <p className="mt-4 text-sm leading-7 text-gray-600">{errorMessage}</p>
+                    <button
+                        onClick={() => router.push('/')}
+                        className="mt-8 rounded-full bg-black px-6 py-3 text-sm font-semibold text-white"
+                    >
+                        Back to home
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    if (cards.length === 0) {
+        return (
+            <div className="min-h-screen bg-gray-50 px-4 py-12">
+                <div className="max-w-xl mx-auto rounded-3xl bg-white p-8 shadow-sm text-center">
+                    <h1 className="text-3xl font-semibold text-gray-900">No flashcards yet</h1>
+                    <p className="mt-4 text-sm leading-7 text-gray-600">
+                        Your flashcards come from the selected language library. Add a few analyzed cards to that library first, then come back to train.
+                    </p>
+                    <button
+                        onClick={() => router.push('/')}
+                        className="mt-8 rounded-full bg-black px-6 py-3 text-sm font-semibold text-white"
+                    >
+                        Go to library
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     if (!currentCard) {
         return <div>Loading...</div>;

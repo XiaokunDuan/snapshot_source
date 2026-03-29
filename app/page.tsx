@@ -32,7 +32,12 @@ interface WordResult {
   availableLanguages: LanguageCode[];
   primaryLanguage: LanguageCode;
   variants: Record<LanguageCode, LanguageVariant>;
-  enhancementPending?: boolean;
+}
+
+interface CardDetailState {
+  item: WordResult;
+  imageUrl?: string;
+  language: LanguageCode;
 }
 
 interface HistoryItem extends WordResult {
@@ -71,7 +76,6 @@ interface BillingStatus {
 
 const HISTORY_CACHE_KEY = 'vocabulary_history';
 const PRIMARY_LANGUAGE_KEY = 'snapshot_primary_language';
-const HOME_PROMO_DISMISSED_KEY = 'snapshot_home_promo_dismissed';
 const TARGET_LANGUAGES_KEY = 'snapshot_target_languages';
 
 function persistHistoryCache(items: HistoryItem[]) {
@@ -169,8 +173,8 @@ export default function Home() {
   const [billing, setBilling] = useState<BillingStatus | null>(null);
   const [showBillingDrawer, setShowBillingDrawer] = useState(false);
   const [preferredLanguage, setPreferredLanguage] = useState<LanguageCode>(DEFAULT_LANGUAGE);
-  const [targetLanguages, setTargetLanguages] = useState<LanguageCode[]>(['zh-CN', 'en', 'ja', 'fr', 'ru']);
-  const [dismissedHomePromo, setDismissedHomePromo] = useState(false);
+  const [targetLanguages, setTargetLanguages] = useState<LanguageCode[]>(['en']);
+  const [cardDetail, setCardDetail] = useState<CardDetailState | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
 
@@ -438,6 +442,8 @@ export default function Home() {
     pronunciation: 'Pronunciation & usage',
     related: 'Related forms',
     culture: 'Culture note',
+    cardDetails: 'Card details',
+    openCard: 'Open card',
     continueLearning: 'Keep learning',
     archive: 'Language archive',
     noHistory: 'No learning records yet',
@@ -445,7 +451,7 @@ export default function Home() {
     appLanguage: 'App language',
     primaryLanguage: 'Primary study language',
     targetLibraries: 'Save to language libraries',
-    targetLibrariesHint: 'Selected languages are saved automatically after each photo, and each result is added to those matching libraries.',
+    targetLibrariesHint: 'The checked libraries decide which language cards are generated and saved after each photo.',
     membership: 'Membership',
     freeStatus: (remaining: number, limit: number) => `Free tier · ${remaining}/${limit} analyses left`,
     about: 'About',
@@ -529,6 +535,8 @@ export default function Home() {
     pronunciation: '发音与用法',
     related: '相关词形',
     culture: '文化补充',
+    cardDetails: '卡片详情',
+    openCard: '打开卡片',
     continueLearning: '继续学习',
     archive: '语言库档案',
     noHistory: '还没有学习记录',
@@ -536,7 +544,7 @@ export default function Home() {
     appLanguage: '应用语言',
     primaryLanguage: '默认学习语言',
     targetLibraries: '保存到语言库',
-    targetLibrariesHint: '你勾选的语言会在每次拍照后自动保存到对应语言库里，后面翻记录时会直接按这些库来归档。',
+    targetLibrariesHint: '你勾选哪些语言库，这次拍照就会生成哪些语言卡片，并自动归档到这些库里。',
     membership: '会员与额度',
     freeStatus: (remaining: number, limit: number) => `免费层 · 剩余 ${remaining}/${limit} 次识图额度`,
     about: '关于应用',
@@ -633,9 +641,22 @@ export default function Home() {
     });
   };
 
+  const openCardDetail = (item: WordResult, imageUrl?: string, language?: LanguageCode) => {
+    const activeLanguage = language && item.availableLanguages.includes(language)
+      ? language
+      : item.availableLanguages.includes(preferredLanguage)
+        ? preferredLanguage
+        : item.primaryLanguage;
+
+    setCardDetail({
+      item,
+      imageUrl,
+      language: activeLanguage,
+    });
+  };
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      setDismissedHomePromo(window.localStorage.getItem(HOME_PROMO_DISMISSED_KEY) === '1');
     }
   }, []);
 
@@ -896,7 +917,11 @@ export default function Home() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ imageUrl: base64Image }),
+        body: JSON.stringify({
+          imageUrl: base64Image,
+          primaryLanguage: preferredLanguage,
+          targetLanguages,
+        }),
       });
 
       if (!analyzeRes.ok) {
@@ -928,7 +953,7 @@ export default function Home() {
         sentence_cn: analyzeData.sentence_cn,
         availableLanguages: Array.isArray(analyzeData.availableLanguages)
           ? analyzeData.availableLanguages.filter((language: unknown): language is LanguageCode => typeof language === 'string')
-          : [...SUPPORTED_LANGUAGE_CODES],
+          : [...targetLanguages],
         primaryLanguage: normalizeLanguageCode(analyzeData.primaryLanguage),
         variants: normalizeVariants(analyzeData.variants, {
           'zh-CN': {
@@ -946,7 +971,6 @@ export default function Home() {
             exampleTranslation: analyzeData.sentence_cn,
           },
         }),
-        enhancementPending: Boolean(analyzeData.enhancementPending),
       };
 
       setResult(wordResult);
@@ -1072,85 +1096,7 @@ export default function Home() {
         })
         .catch(err => console.error('Failed to save to database:', err));
 
-      if (wordResult.enhancementPending) {
-        void fetch('/api/analyze/enrich', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            sourceObject: wordResult.sourceObject,
-            sourceLabelEn: wordResult.sourceLabelEn,
-            word: wordResult.word,
-            phonetic: wordResult.phonetic,
-            meaning: wordResult.meaning,
-            sentence: wordResult.sentence,
-            sentence_cn: wordResult.sentence_cn,
-          }),
-        })
-          .then(async (response) => {
-            if (!response.ok) {
-              throw new Error(`Enhancement failed with ${response.status}`);
-            }
-
-            return response.json();
-          })
-          .then(async (enhanced) => {
-            const enhancedResult: WordResult = {
-              ...wordResult,
-              sourceObject: enhanced.sourceObject || wordResult.sourceObject,
-              sourceLabelEn: enhanced.sourceLabelEn || wordResult.sourceLabelEn,
-              availableLanguages: Array.isArray(enhanced.availableLanguages)
-                ? enhanced.availableLanguages.filter((language: unknown): language is LanguageCode => typeof language === 'string')
-                : wordResult.availableLanguages,
-              variants: normalizeVariants(enhanced.variants, wordResult.variants),
-              enhancementPending: false,
-            };
-
-            setResult((current) => {
-              if (!current) {
-                return current;
-              }
-              return current.word === wordResult.word && current.sourceObject === wordResult.sourceObject
-                ? enhancedResult
-                : current;
-            });
-
-            setHistory((current) => {
-              const merged = current.map((item) => item.timestamp === historyItem.timestamp
-                ? {
-                  ...item,
-                  ...enhancedResult,
-                }
-                : item);
-              persistHistoryCache(merged);
-              return merged;
-            });
-
-            const savedItem = await persistHistoryPromise;
-            if (savedItem?.id) {
-              await fetch('/api/history', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  id: savedItem.id,
-                  word: enhancedResult.word,
-                  phonetic: enhancedResult.phonetic,
-                  meaning: enhancedResult.meaning,
-                  sentence: enhancedResult.sentence,
-                  sentence_cn: enhancedResult.sentence_cn,
-                  primaryLanguage: nextPrimaryLanguage,
-                  variantsJson: enhancedResult.variants,
-                }),
-              }).catch((error) => {
-                console.error('Failed to persist enriched variants:', error);
-              });
-            }
-          })
-          .catch((error) => {
-            console.error('Failed to enrich language variants:', error);
-          });
-      }
+      void persistHistoryPromise;
 
     } catch (analyzeError) {
       console.error('Analysis error:', analyzeError);
@@ -1234,13 +1180,6 @@ export default function Home() {
     const variant = item.variants[preferredLanguage];
     return Boolean(variant?.term || variant?.meaning);
   });
-  const showHomeOffer = Boolean(
-    billing && !dismissedHomePromo && (
-      billing.subscriptionStatus !== 'free'
-      || history.length >= 2
-      || billing.remaining <= 5
-    )
-  );
   const currentLocale = locale === 'en' ? 'en-US' : 'zh-CN';
   const mastheadDate = new Date().toLocaleDateString(currentLocale, {
     month: 'long',
@@ -1415,7 +1354,7 @@ export default function Home() {
                         }}
                         className="absolute right-5 top-5 rounded-full bg-[var(--editorial-ink)] px-4 py-2 text-xs font-semibold text-[var(--editorial-paper)] shadow-sm outline-none focus:outline-none focus-visible:outline-none"
                       >
-                        {billing?.subscriptionStatus === 'free' ? ui.membership : 'Snapshot Pro'}
+                        {billing?.subscriptionStatus === 'free' ? ui.billingUpgrade : 'Snapshot Pro'}
                       </button>
 
                       <div className="grid gap-8 md:grid-cols-[0.9fr_1.1fr] md:items-center">
@@ -1447,60 +1386,6 @@ export default function Home() {
                     </div>
                   </UploadDrawer>
 
-                  <div className="grid gap-4 lg:grid-cols-[1.12fr_0.88fr]">
-                    <div className="order-first space-y-4 lg:order-last">
-                      {showHomeOffer && billing && (
-                        <div className="editorial-panel relative overflow-hidden p-5 sm:p-6">
-                          <button
-                            onClick={() => {
-                              playTap();
-                              setDismissedHomePromo(true);
-                              if (typeof window !== 'undefined') {
-                                window.localStorage.setItem(HOME_PROMO_DISMISSED_KEY, '1');
-                              }
-                            }}
-                            className="absolute right-4 top-4 rounded-full border border-[var(--editorial-border)] bg-[var(--editorial-panel)] p-2 text-[var(--editorial-muted)] transition hover:text-[var(--editorial-ink)]"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                          <div className="pr-10">
-                            <h3 className="editorial-serif mt-3 text-3xl font-semibold leading-tight">
-                              {billing.subscriptionStatus === 'free'
-                                ? ui.promoTitleFree(billing.remaining)
-                                : (locale === 'en' ? `${billing.remaining} analyses left` : `剩余 ${billing.remaining} 次识图`)}
-                            </h3>
-                            <p className="mt-3 text-sm leading-7 text-[var(--editorial-muted)]">
-                              {billing.subscriptionStatus === 'free'
-                                ? ui.promoTextFree
-                                : (locale === 'en'
-                                  ? `Current plan: ${billing.subscriptionStatus}. ${billing.remaining} analyses remain this cycle.`
-                                  : `当前方案：${billing.subscriptionStatus}。本周期还可继续使用 ${billing.remaining} 次识图。`)}
-                            </p>
-                          </div>
-                          <div className="mt-5 flex items-center justify-end">
-                            {billing.subscriptionStatus === 'free' ? (
-                              <button
-                                onClick={() => {
-                                  playTap();
-                                  setShowBillingDrawer(true);
-                                  void trackClientEvent('billing_cta_clicked', { location: 'home_chip' });
-                                }}
-                                className="rounded-full bg-[var(--editorial-ink)] px-4 py-2 text-xs font-semibold text-[var(--editorial-paper)]"
-                              >
-                                {ui.promoCtaFree}
-                              </button>
-                            ) : (
-                              <span className="rounded-full border border-[var(--editorial-border)] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--editorial-muted)]">
-                                {billing.subscriptionStatus}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    <div />
-                  </div>
                 </>
               )}
 
@@ -1548,7 +1433,7 @@ export default function Home() {
                       </div>
 
                       <div className="flex flex-wrap gap-2">
-                        {SUPPORTED_LANGUAGE_CODES.map((language) => (
+                        {result.availableLanguages.map((language) => (
                           <button
                             key={language}
                             onClick={() => {
@@ -1565,60 +1450,37 @@ export default function Home() {
 
                       {activeVariant && (
                         <>
-                          <div>
-                            <h3 className="editorial-serif mb-3 text-5xl font-semibold tracking-[-0.04em] sm:text-6xl">
-                              {activeVariant.term || result.word}
-                            </h3>
-                            <p className="font-mono text-xl text-[var(--editorial-accent)]">
-                              {activeVariant.phonetic || result.phonetic}
-                            </p>
-                          </div>
-
-                          <div className="inline-block rounded-full bg-[var(--editorial-accent)] px-6 py-3">
-                            <p className="text-lg font-medium text-black">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              playTap();
+                              openCardDetail(result, currentImage, preferredLanguage);
+                            }}
+                            className="w-full rounded-[1.9rem] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.76)] p-6 text-left transition-all hover:-translate-y-0.5"
+                          >
+                            <div className="flex items-start justify-between gap-4">
+                              <div>
+                                <span className="rounded-full border border-[var(--editorial-border)] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--editorial-muted)]">
+                                  {LANGUAGE_LABELS[preferredLanguage]}
+                                </span>
+                                <h3 className="editorial-serif mt-4 text-5xl font-semibold tracking-[-0.04em] sm:text-6xl">
+                                  {activeVariant.term || result.word}
+                                </h3>
+                                <p className="mt-2 font-mono text-lg text-[var(--editorial-accent)]">
+                                  {activeVariant.phonetic || result.phonetic}
+                                </p>
+                              </div>
+                              <span className="rounded-full bg-[var(--editorial-ink)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--editorial-paper)]">
+                                {ui.openCard}
+                              </span>
+                            </div>
+                            <p className="mt-5 inline-flex rounded-full bg-[var(--editorial-accent)] px-5 py-3 text-base font-medium text-black">
                               {activeVariant.meaning || result.meaning}
                             </p>
-                          </div>
-
-                          <div className="grid gap-4 md:grid-cols-2">
-                            <div className="rounded-[1.75rem] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.72)] p-6">
-                              <p className="editorial-caption">{ui.example}</p>
-                              <p className="mt-3 text-base italic text-[var(--editorial-ink)]">
-                                &quot;{activeVariant.example || result.sentence}&quot;
-                              </p>
-                              <p className="mt-3 text-sm leading-7 text-[var(--editorial-muted)]">
-                                {activeVariant.exampleTranslation || result.sentence_cn}
-                              </p>
-                            </div>
-                            <div className="rounded-[1.75rem] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.72)] p-6">
-                              <p className="editorial-caption">{ui.pronunciation}</p>
-                              <p className="mt-3 text-sm leading-7 text-[var(--editorial-ink)]">
-                                {activeVariant.pronunciationTip}
-                              </p>
-                              <p className="mt-3 text-sm leading-7 text-[var(--editorial-muted)]">
-                                {activeVariant.grammarNote}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="grid gap-4 md:grid-cols-[0.75fr_1.25fr]">
-                            <div className="rounded-[1.75rem] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.72)] p-6">
-                              <p className="editorial-caption">{ui.related}</p>
-                              <div className="mt-4 flex flex-wrap gap-2">
-                                {(activeVariant.relatedForms.length > 0 ? activeVariant.relatedForms : [activeVariant.term || result.word]).map((form) => (
-                                  <span key={form} className="rounded-full border border-[var(--editorial-border)] px-3 py-2 text-xs uppercase tracking-[0.16em] text-[var(--editorial-muted)]">
-                                    {form}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                            <div className="rounded-[1.75rem] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.72)] p-6">
-                              <p className="editorial-caption">{ui.culture}</p>
-                              <p className="mt-3 text-sm leading-7 text-[var(--editorial-muted)]">
-                                {activeVariant.cultureNote}
-                              </p>
-                            </div>
-                          </div>
+                            <p className="mt-5 line-clamp-2 text-sm leading-7 text-[var(--editorial-muted)]">
+                              {activeVariant.example || result.sentence}
+                            </p>
+                          </button>
                         </>
                       )}
 
@@ -1773,9 +1635,8 @@ export default function Home() {
                         src={item.imageUrl}
                         alt={item.word}
                         onClick={() => {
-                          setActiveTab('home');
-                          setCurrentImage(item.imageUrl);
-                          setResult(item);
+                          playTap();
+                          openCardDetail(item, item.imageUrl, preferredLanguage);
                         }}
                         className="h-40 w-full cursor-pointer rounded-[1.5rem] object-cover"
                       />
@@ -1783,10 +1644,8 @@ export default function Home() {
                         <div className="flex justify-between items-start mb-2">
                           <p
                             onClick={() => {
-                              setActiveTab('home');
-                              setCurrentImage(item.imageUrl);
-                              setPreferredLanguage(item.primaryLanguage || preferredLanguage);
-                              setResult(item);
+                              playTap();
+                              openCardDetail(item, item.imageUrl, preferredLanguage);
                             }}
                             className="editorial-serif mr-2 cursor-pointer truncate text-2xl font-semibold"
                           >
@@ -2019,8 +1878,8 @@ export default function Home() {
                     </div>
                     <p className="mt-3 text-sm leading-7 text-[var(--editorial-muted)]">
                       {locale === 'en'
-                        ? 'The result screen opens in this language first, and the archive view follows it by default.'
-                        : '识图结果、历史语言库和默认展示语言都会优先跟随这个设置。'}
+                        ? 'This sets which language card opens first after each analysis.'
+                        : '这个设置只决定识图后默认先打开哪一种语言卡片。'}
                     </p>
                   </div>
 
@@ -2204,6 +2063,116 @@ export default function Home() {
           </div>
         </div>
       </nav>
+
+      {cardDetail && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 p-4 backdrop-blur-sm">
+          <div className="editorial-panel max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-[2rem] p-6 sm:p-7">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="editorial-kicker">{ui.cardDetails}</p>
+                <h3 className="editorial-serif mt-3 text-3xl font-semibold tracking-[-0.04em] sm:text-4xl">
+                  {cardDetail.item.sourceObject}
+                </h3>
+                <p className="mt-2 text-xs uppercase tracking-[0.2em] text-[var(--editorial-muted)]">
+                  {cardDetail.item.sourceLabelEn}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCardDetail(null)}
+                className="rounded-full border border-[var(--editorial-border)] bg-[var(--editorial-panel)] p-2 text-[var(--editorial-muted)]"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mt-5 flex flex-wrap gap-2">
+              {cardDetail.item.availableLanguages.map((language) => (
+                <button
+                  key={language}
+                  type="button"
+                  onClick={() => {
+                    playTap();
+                    setCardDetail((current) => current ? { ...current, language } : current);
+                  }}
+                  data-active={cardDetail.language === language}
+                  className="editorial-language-tab rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em]"
+                >
+                  {LANGUAGE_LABELS[language]}
+                </button>
+              ))}
+            </div>
+
+            {(() => {
+              const detailVariant = cardDetail.item.variants[cardDetail.language] ?? cardDetail.item.variants[cardDetail.item.primaryLanguage];
+              return (
+                <div className="mt-6 space-y-4">
+                  {cardDetail.imageUrl && (
+                    <img
+                      src={cardDetail.imageUrl}
+                      alt={detailVariant.term || cardDetail.item.word}
+                      className="h-52 w-full rounded-[1.5rem] object-cover"
+                    />
+                  )}
+
+                  <div className="rounded-[1.75rem] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.76)] p-5">
+                    <p className="editorial-caption">{LANGUAGE_LABELS[cardDetail.language]}</p>
+                    <h4 className="editorial-serif mt-3 text-4xl font-semibold tracking-[-0.04em]">
+                      {detailVariant.term || cardDetail.item.word}
+                    </h4>
+                    <p className="mt-2 font-mono text-lg text-[var(--editorial-accent)]">
+                      {detailVariant.phonetic || cardDetail.item.phonetic}
+                    </p>
+                    <p className="mt-4 text-sm leading-7 text-[var(--editorial-ink)]">
+                      {detailVariant.meaning || cardDetail.item.meaning}
+                    </p>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="rounded-[1.75rem] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.72)] p-5">
+                      <p className="editorial-caption">{ui.example}</p>
+                      <p className="mt-3 text-base italic text-[var(--editorial-ink)]">
+                        &quot;{detailVariant.example || cardDetail.item.sentence}&quot;
+                      </p>
+                      <p className="mt-3 text-sm leading-7 text-[var(--editorial-muted)]">
+                        {detailVariant.exampleTranslation || cardDetail.item.sentence_cn}
+                      </p>
+                    </div>
+                    <div className="rounded-[1.75rem] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.72)] p-5">
+                      <p className="editorial-caption">{ui.pronunciation}</p>
+                      <p className="mt-3 text-sm leading-7 text-[var(--editorial-ink)]">
+                        {detailVariant.pronunciationTip}
+                      </p>
+                      <p className="mt-3 text-sm leading-7 text-[var(--editorial-muted)]">
+                        {detailVariant.grammarNote}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-[0.8fr_1.2fr]">
+                    <div className="rounded-[1.75rem] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.72)] p-5">
+                      <p className="editorial-caption">{ui.related}</p>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {(detailVariant.relatedForms.length > 0 ? detailVariant.relatedForms : [detailVariant.term || cardDetail.item.word]).map((form) => (
+                          <span key={form} className="rounded-full border border-[var(--editorial-border)] px-3 py-2 text-xs uppercase tracking-[0.16em] text-[var(--editorial-muted)]">
+                            {form}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="rounded-[1.75rem] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.72)] p-5">
+                      <p className="editorial-caption">{ui.culture}</p>
+                      <p className="mt-3 text-sm leading-7 text-[var(--editorial-muted)]">
+                        {detailVariant.cultureNote}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
 
       <BillingDrawer
         open={showBillingDrawer}

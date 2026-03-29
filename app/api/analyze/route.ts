@@ -1,26 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as Sentry from '@sentry/nextjs';
 import { z } from 'zod';
-import { fetchWithKeyRotation } from '@/lib/gemini';
 import { enforceRateLimit } from '@/lib/rate-limit';
 import { consumeAnalyzeCredit, getBillingStatus } from '@/lib/billing';
 import { requireDbUser } from '@/lib/users';
 import { trackServerEvent } from '@/lib/analytics';
-import { buildFallbackVariants, normalizeLanguageCode, type LanguageCode } from '@/lib/language-content';
+import { DEFAULT_LANGUAGE, SUPPORTED_LANGUAGE_CODES, normalizeLanguageCode, type LanguageCode } from '@/lib/language-content';
+import { generateLanguageCardsWithGemini } from '@/lib/gemini-multilingual';
 
 const analyzeSchema = z.object({
     imageUrl: z.string().min(1, 'imageUrl is required'),
+    primaryLanguage: z.enum(SUPPORTED_LANGUAGE_CODES).optional().default(DEFAULT_LANGUAGE),
+    targetLanguages: z.array(z.enum(SUPPORTED_LANGUAGE_CODES)).max(5).optional(),
 });
-
-interface WordResult {
-    sourceObject: string;
-    sourceLabelEn: string;
-    word: string;
-    phonetic: string;
-    meaning: string;
-    sentence: string;
-    sentence_cn: string;
-}
 
 export async function POST(req: NextRequest) {
     let userId: number | null = null;
@@ -68,32 +60,18 @@ export async function POST(req: NextRequest) {
         }
 
         const { imageUrl } = parsed.data;
+        const targetLanguages = Array.from(new Set(parsed.data.targetLanguages?.length
+            ? parsed.data.targetLanguages
+            : [parsed.data.primaryLanguage])) as LanguageCode[];
+        const primaryLanguage = targetLanguages.includes(parsed.data.primaryLanguage)
+            ? parsed.data.primaryLanguage
+            : targetLanguages[0];
         requestImageKind = imageUrl.startsWith('data:') ? 'data-url' : 'remote-url';
 
-        // 构建 Gemini API 请求
-        const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
-        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
-
-        // 系统提示词
-        const systemPrompt = `你是一个专业的视觉语言识别助手。用户会发给你一张图片。请先识别图片中的核心物体或主题，再给出一个最适合作为学习锚点的英文词条。
-
-你必须返回以下 JSON 格式，不要包含任何其他文字：
-{
-  "sourceObject": "对该物体/主题的中文或通用描述",
-  "sourceLabelEn": "该物体/主题的英文标签",
-  "word": "英文单词",
-  "phonetic": "/音标/",
-  "meaning": "中文释义",
-  "sentence": "英文例句",
-  "sentence_cn": "例句的中文翻译"
-}`;
-
-        // 处理 base64 或 URL
         let imageData: string;
         let mimeType = 'image/jpeg';
         if (imageUrl.startsWith('data:')) {
             mimeType = getMimeTypeFromDataUrl(imageUrl);
-            // 提取 base64 数据（去掉 "data:image/...;base64," 前缀）
             imageData = imageUrl.split(',')[1];
         } else {
             const remoteUrl = validateRemoteImageUrl(imageUrl);
@@ -111,94 +89,39 @@ export async function POST(req: NextRequest) {
         }
         requestMimeType = mimeType;
 
-        const requestBody = {
-            contents: [
-                {
-                    role: 'user',
-                    parts: [
-                        { text: systemPrompt },
-                        {
-                            inline_data: {
-                                mime_type: mimeType,
-                                data: imageData,
-                            },
-                        },
-                    ],
-                },
-            ],
-            generationConfig: {
-                temperature: 0.4,
-                topK: 32,
-                topP: 1,
-                maxOutputTokens: 1024,
-                responseMimeType: 'application/json',
-            },
-        };
-
-        // 调用 Gemini API via utility (handles key rotation)
-        const { data } = await fetchWithKeyRotation(endpoint, {
-            method: 'POST',
-            body: requestBody,
+        const languagePack = await generateLanguageCardsWithGemini({
+            imageData,
+            mimeType,
+            primaryLanguage,
+            targetLanguages,
         });
 
-        // 提取生成的文本
-        const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        const displayLanguage = languagePack.availableLanguages.includes(primaryLanguage)
+            ? primaryLanguage
+            : languagePack.availableLanguages[0];
+        const displayVariant = languagePack.variants[displayLanguage];
 
-        if (!generatedText) {
-            console.error('[Analyze] No text generated:', data);
-            return NextResponse.json(
-                { error: 'No response from Gemini' },
-                { status: 500 }
-            );
-        }
-
-        // 解析 JSON 响应
-        let result: WordResult;
-        try {
-            const parsedResult = JSON.parse(generatedText);
-            result = Array.isArray(parsedResult) ? parsedResult[0] : parsedResult;
-        } catch {
-            console.error('[Analyze] Failed to parse JSON:', generatedText);
-            return NextResponse.json(
-                { error: 'Invalid JSON response from AI', raw: generatedText },
-                { status: 500 }
-            );
-        }
-
-        const validationError = validateWordResult(result);
-        if (validationError) {
-            return NextResponse.json(
-                { error: validationError, raw: result },
-                { status: 500 }
-            );
-        }
-
-        console.log(`[Analyze] Successfully analyzed: ${result.word}`);
+        console.log(`[Analyze] Successfully analyzed: ${displayVariant.term}`);
         await consumeAnalyzeCredit(user.id);
 
-        const languagePack = buildFallbackVariants({
-            sourceObject: result.sourceObject,
-            sourceLabelEn: result.sourceLabelEn,
-            word: result.word,
-            phonetic: result.phonetic,
-            meaning: result.meaning,
-            sentence: result.sentence,
-            sentenceCn: result.sentence_cn,
-        });
         await trackServerEvent('analyze_succeeded', {
-            word: result.word,
+            word: displayVariant.term,
             subscriptionStatus: billingStatus.subscriptionStatus,
+            languageCount: languagePack.availableLanguages.length,
         });
 
         return NextResponse.json({
             success: true,
-            ...result,
             sourceObject: languagePack.sourceObject,
             sourceLabelEn: languagePack.sourceLabelEn,
-            primaryLanguage: normalizeLanguageCode('en') satisfies LanguageCode,
+            word: displayVariant.term,
+            phonetic: displayVariant.phonetic,
+            meaning: displayVariant.meaning,
+            sentence: displayVariant.example,
+            sentence_cn: displayVariant.exampleTranslation,
+            primaryLanguage: normalizeLanguageCode(displayLanguage) satisfies LanguageCode,
             availableLanguages: languagePack.availableLanguages,
             variants: languagePack.variants,
-            enhancementPending: true,
         });
 
     } catch (error) {
@@ -214,7 +137,7 @@ export async function POST(req: NextRequest) {
                 imageKind: requestImageKind,
                 mimeType: requestMimeType,
                 userId,
-                model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+                model: process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite',
             });
             Sentry.captureException(error);
         });
@@ -229,19 +152,6 @@ export async function POST(req: NextRequest) {
             { status: 500 }
         );
     }
-}
-
-function validateWordResult(result: Partial<WordResult>) {
-    const requiredFields: (keyof WordResult)[] = ['sourceObject', 'sourceLabelEn', 'word', 'phonetic', 'meaning', 'sentence', 'sentence_cn'];
-
-    for (const field of requiredFields) {
-        const value = result[field];
-        if (typeof value !== 'string' || !value.trim()) {
-            return `AI response is missing required field: ${field}`;
-        }
-    }
-
-    return null;
 }
 
 function validateRemoteImageUrl(imageUrl: string) {

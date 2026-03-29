@@ -150,7 +150,23 @@ function toIsoString(value: string | Date | null | undefined) {
     return value.toISOString();
   }
 
+  if (typeof value === 'object') {
+    const normalized = new Date(value);
+    if (!Number.isNaN(normalized.getTime())) {
+      return normalized.toISOString();
+    }
+  }
+
   return value;
+}
+
+function toPeriodDate(value: string | Date | null | undefined) {
+  const iso = toIsoString(value);
+  if (!iso) {
+    return null;
+  }
+
+  return iso.slice(0, 10);
 }
 
 export function buildBillingStatus(row: BillingStatusRow | null): BillingStatus {
@@ -471,8 +487,12 @@ export async function consumeAnalyzeCredit(userId: number) {
       throw new Error('Monthly analyze limit reached');
     }
 
-    const periodStart = status.currentPeriodStart.slice(0, 10);
-    const periodEnd = status.currentPeriodEnd.slice(0, 10);
+    const periodStart = toPeriodDate(status.currentPeriodStart);
+    const periodEnd = toPeriodDate(status.currentPeriodEnd);
+
+    if (!periodStart || !periodEnd) {
+      throw new Error('Subscription period is not available');
+    }
 
     const updated = await client.query(
       `INSERT INTO usage_counters (user_id, period_start, period_end, monthly_limit, analyze_count, created_at, updated_at)
