@@ -4,8 +4,6 @@ import { auth, currentUser } from '@clerk/nextjs/server';
 import { getPool } from '@/lib/db';
 import { getBillingStatus } from '@/lib/billing';
 
-const pool = getPool();
-
 export async function GET(_request: NextRequest) {
     try {
         const authResult = await auth();
@@ -20,7 +18,7 @@ export async function GET(_request: NextRequest) {
             return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
-        const client = await pool.connect();
+        const client = await getPool().connect();
 
         try {
             // Check if user exists in database

@@ -9,6 +9,9 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
+    "mobile:sync": "npx cap sync",
+    "mobile:android": "npx cap open android",
+    "mobile:ios": "npx cap open ios",
     "db:setup": "tsx scripts/setup-db.ts",
     "db:migrate": "tsx scripts/migrate-db.ts",
     "db:add-coins": "tsx scripts/add-coins.ts"
