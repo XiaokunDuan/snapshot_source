@@ -517,7 +517,7 @@ export default function Home() {
     archiveCount: '档案',
     homeTitle: '让相机先注意到，再开始学习。',
     homeBody: '拍一张图，抓住一个概念，再把它变成可以反复复习的语言样本。',
-    snapshotStudio: 'Snapshot studio',
+    snapshotStudio: '学习台',
     dailyCadence: '学习节奏',
     uploadTag1: 'AI 提炼',
     uploadTag2: '自动归档',
@@ -701,30 +701,30 @@ export default function Home() {
                   {ui.signIn}
                 </button>
               </div>
-              <div className="mt-10 flex flex-wrap gap-3 text-xs uppercase tracking-[0.22em] text-[var(--editorial-muted)]">
-                <span className="rounded-full border border-[var(--editorial-border)] px-4 py-3">camera first</span>
+              <div className="mt-12 flex flex-wrap gap-3 text-xs uppercase tracking-[0.22em] text-[var(--editorial-muted)]">
+                <span className="rounded-full border border-[var(--editorial-border)] px-4 py-3">{locale === 'en' ? 'camera first' : '先拍再学'}</span>
                 <span className="rounded-full border border-[var(--editorial-border)] px-4 py-3">{ui.freeTag}</span>
-                <span className="rounded-full border border-[var(--editorial-border)] px-4 py-3">multilingual desk</span>
+                <span className="rounded-full border border-[var(--editorial-border)] px-4 py-3">{locale === 'en' ? 'multilingual desk' : '多语言学习台'}</span>
               </div>
             </div>
 
-            <div className="editorial-panel p-6 sm:p-8 editorial-float">
+            <div className="editorial-panel mt-3 p-6 sm:mt-4 sm:p-8 editorial-float">
               <div className="rounded-[2.25rem] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.86)] p-6 dark:bg-[rgba(255,255,255,0.03)]">
                 <div className="flex items-center justify-between">
                   <h2 className="editorial-serif text-3xl font-semibold">{locale === 'en' ? 'Learning flow' : '学习流程'}</h2>
-                  <span className="editorial-accent-pill">{locale === 'en' ? 'mobile first' : '移动优先'}</span>
+                  <span className="editorial-accent-pill rounded-full border border-[color:color-mix(in_srgb,var(--editorial-accent)_65%,black_8%)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em]">{locale === 'en' ? 'mobile first' : '移动优先'}</span>
                 </div>
                 <div className="mt-8 space-y-3 rounded-[2rem] border border-[var(--editorial-border)] bg-[var(--editorial-panel)] p-5">
                   <div className="flex items-center justify-between text-sm text-[var(--editorial-muted)]">
-                    <span>1. Capture</span>
+                    <span>{locale === 'en' ? '1. Capture' : '1. 拍照'}</span>
                     <span>{locale === 'en' ? 'Camera / upload' : '拍照 / 上传'}</span>
                   </div>
                   <div className="flex items-center justify-between text-sm text-[var(--editorial-muted)]">
-                    <span>2. Extract</span>
+                    <span>{locale === 'en' ? '2. Extract' : '2. 提炼'}</span>
                     <span>{locale === 'en' ? 'Extract / switch languages' : '识别 / 语言切换'}</span>
                   </div>
-                  <div className="flex items-center justify-between border-t border-[var(--editorial-border)] pt-4 text-base font-semibold">
-                    <span>3. Archive</span>
+                  <div className="flex items-center justify-between border-t border-[var(--editorial-border)] pt-4 text-sm text-[var(--editorial-muted)]">
+                    <span>{locale === 'en' ? '3. Archive' : '3. 归档'}</span>
                     <span>{locale === 'en' ? 'Archive / review / libraries' : '历史 / 复习 / 词库'}</span>
                   </div>
                 </div>
@@ -752,24 +752,24 @@ export default function Home() {
               <h2 className="editorial-serif mt-4 text-4xl font-semibold tracking-[-0.04em]">{ui.landingSectionBody}</h2>
               <div className="mt-6 grid gap-3 sm:grid-cols-3">
                 <div className="rounded-[1.8rem] border border-[var(--editorial-border)] bg-[rgba(255,255,255,0.45)] p-5 dark:bg-[rgba(255,255,255,0.03)]">
-                  <div className="editorial-caption">Free tier</div>
+                  <div className="editorial-caption">{locale === 'en' ? 'Free tier' : '免费额度'}</div>
                   <div className="mt-3 text-3xl font-semibold">20</div>
                   <p className="mt-2 text-sm text-[var(--editorial-muted)]">{ui.freeTag}</p>
                 </div>
                 <div className="rounded-[1.8rem] border border-[var(--editorial-border)] bg-[rgba(255,255,255,0.45)] p-5 dark:bg-[rgba(255,255,255,0.03)]">
-                  <div className="editorial-caption">Modes</div>
+                  <div className="editorial-caption">{locale === 'en' ? 'Modes' : '语言模式'}</div>
                   <div className="mt-3 text-3xl font-semibold">5</div>
                   <p className="mt-2 text-sm text-[var(--editorial-muted)]">{ui.multiTag}</p>
                 </div>
                 <div className="rounded-[1.8rem] border border-[var(--editorial-border)] bg-[rgba(255,255,255,0.45)] p-5 dark:bg-[rgba(255,255,255,0.03)]">
-                  <div className="editorial-caption">Archive</div>
-                  <div className="mt-3 text-3xl font-semibold">1 tap</div>
+                  <div className="editorial-caption">{locale === 'en' ? 'Archive' : '归档'}</div>
+                  <div className="mt-3 text-3xl font-semibold">{locale === 'en' ? '1 tap' : '一步保存'}</div>
                   <p className="mt-2 text-sm text-[var(--editorial-muted)]">{locale === 'en' ? 'Auto-saved into your archive' : '自动归档进历史'}</p>
                 </div>
               </div>
             </div>
             <div className="editorial-panel p-7 sm:p-8">
-              <p className="editorial-kicker">Get started</p>
+              <p className="editorial-kicker">{locale === 'en' ? 'Get started' : '开始使用'}</p>
               <h2 className="editorial-serif mt-4 text-4xl font-semibold tracking-[-0.04em]">{ui.landingReadyTitle}</h2>
               <p className="mt-4 text-sm leading-7 text-[var(--editorial-muted)]">
                 {ui.landingReadyBody}
@@ -1267,7 +1267,7 @@ export default function Home() {
                       {ui.homeBody}
                     </p>
                     <div className="mt-6 flex flex-wrap gap-3">
-                      <span className="editorial-accent-pill">{mastheadDate}</span>
+                      <span className="editorial-accent-pill rounded-full border border-[color:color-mix(in_srgb,var(--editorial-accent)_65%,black_8%)] px-4 py-2 text-sm font-semibold tracking-[-0.01em]">{mastheadDate}</span>
                       <span className="rounded-full border border-[var(--editorial-border)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-[var(--editorial-muted)]">
                         {stats.today} {ui.today}
                       </span>
@@ -1855,7 +1855,7 @@ export default function Home() {
           {activeTab === 'stats' && (
             <PageTransition key="stats" className="space-y-6">
               <div className="editorial-panel p-6 sm:p-8">
-                <p className="editorial-kicker">Metrics</p>
+                <p className="editorial-kicker">{locale === 'en' ? 'Metrics' : '学习统计'}</p>
                 <h2 className="editorial-serif mt-4 text-4xl font-semibold tracking-[-0.04em] sm:text-5xl">{ui.statsTitle}</h2>
                 <p className="mt-3 text-sm text-[var(--editorial-muted)]">{ui.statsBody}</p>
               </div>
@@ -1868,7 +1868,7 @@ export default function Home() {
                     className="absolute right-0 top-0 w-40 h-40 opacity-30 image-soften"
                   />
                   <div className="text-center relative z-10">
-                    <div className="editorial-caption">Archive volume</div>
+                    <div className="editorial-caption">{locale === 'en' ? 'Archive volume' : '累计档案'}</div>
                     <div className="mt-3 text-6xl font-semibold text-[var(--editorial-accent)]">{stats.total}</div>
                     <div className="mt-2 text-lg font-medium">{ui.totalStudied}</div>
                   </div>
