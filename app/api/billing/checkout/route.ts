@@ -16,9 +16,14 @@ export async function POST() {
     return NextResponse.json(checkout);
   } catch (error) {
     Sentry.captureException(error);
+    const message = error instanceof Error ? error.message : 'Failed to start checkout';
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to start checkout' },
-      { status: 400 }
+      {
+        error: message === 'An existing subscription already exists'
+          ? 'An active membership is already available on this account.'
+          : message,
+      },
+      { status: message === 'An existing subscription already exists' ? 409 : 400 }
     );
   }
 }

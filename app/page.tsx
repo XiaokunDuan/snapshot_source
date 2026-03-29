@@ -1408,12 +1408,14 @@ export default function Home() {
                         onClick={(event) => {
                           event.stopPropagation();
                           playTap();
-                          setShowBillingDrawer(true);
-                          void trackClientEvent('billing_cta_clicked', { location: 'upload_chip' });
+                          if (billing?.subscriptionStatus === 'free') {
+                            setShowBillingDrawer(true);
+                            void trackClientEvent('billing_cta_clicked', { location: 'upload_chip' });
+                          }
                         }}
                         className="absolute right-5 top-5 rounded-full bg-[var(--editorial-ink)] px-4 py-2 text-xs font-semibold text-[var(--editorial-paper)] shadow-sm outline-none focus:outline-none focus-visible:outline-none"
                       >
-                        {ui.membership}
+                        {billing?.subscriptionStatus === 'free' ? ui.membership : 'Snapshot Pro'}
                       </button>
 
                       <div className="grid gap-8 md:grid-cols-[0.9fr_1.1fr] md:items-center">
@@ -1476,16 +1478,22 @@ export default function Home() {
                             </p>
                           </div>
                           <div className="mt-5 flex items-center justify-end">
-                            <button
-                              onClick={() => {
-                                playTap();
-                                setShowBillingDrawer(true);
-                                void trackClientEvent('billing_cta_clicked', { location: 'home_chip' });
-                              }}
-                              className="rounded-full bg-[var(--editorial-ink)] px-4 py-2 text-xs font-semibold text-[var(--editorial-paper)]"
-                            >
-                              {billing.subscriptionStatus === 'free' ? ui.promoCtaFree : ui.billingView}
-                            </button>
+                            {billing.subscriptionStatus === 'free' ? (
+                              <button
+                                onClick={() => {
+                                  playTap();
+                                  setShowBillingDrawer(true);
+                                  void trackClientEvent('billing_cta_clicked', { location: 'home_chip' });
+                                }}
+                                className="rounded-full bg-[var(--editorial-ink)] px-4 py-2 text-xs font-semibold text-[var(--editorial-paper)]"
+                              >
+                                {ui.promoCtaFree}
+                              </button>
+                            ) : (
+                              <span className="rounded-full border border-[var(--editorial-border)] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--editorial-muted)]">
+                                {billing.subscriptionStatus}
+                              </span>
+                            )}
                           </div>
                         </div>
                       )}
@@ -2104,16 +2112,22 @@ export default function Home() {
                           </p>
                         )}
                       </div>
-                      <button
-                        onClick={() => {
-                          playTap();
-                          setShowBillingDrawer(true);
-                          void trackClientEvent('billing_cta_clicked', { location: 'profile_card' });
-                        }}
-                        className="rounded-full bg-[var(--editorial-ink)] px-4 py-2 text-xs font-semibold text-[var(--editorial-paper)]"
-                      >
-                        {billing.subscriptionStatus === 'free' ? ui.billingUpgrade : ui.billingView}
-                      </button>
+                      {billing.subscriptionStatus === 'free' ? (
+                        <button
+                          onClick={() => {
+                            playTap();
+                            setShowBillingDrawer(true);
+                            void trackClientEvent('billing_cta_clicked', { location: 'profile_card' });
+                          }}
+                          className="rounded-full bg-[var(--editorial-ink)] px-4 py-2 text-xs font-semibold text-[var(--editorial-paper)]"
+                        >
+                          {ui.billingUpgrade}
+                        </button>
+                      ) : (
+                        <span className="rounded-full border border-[var(--editorial-border)] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--editorial-muted)]">
+                          {billing.subscriptionStatus}
+                        </span>
+                      )}
                     </div>
                   </div>
                 )}
