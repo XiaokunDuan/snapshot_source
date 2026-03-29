@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { ArrowLeft, Loader2, Volume2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { normalizeLanguageCode, type LanguageCode } from '@/lib/language-content';
+import { type HistoryApiItem, normalizeHistoryItem } from '@/lib/history-records';
 
 interface WordCard {
     id: string;
@@ -16,23 +17,6 @@ interface WordCard {
 }
 
 const PRIMARY_LANGUAGE_KEY = 'snapshot_primary_language';
-
-type HistoryResponseItem = {
-    id?: number | string;
-    word?: string;
-    phonetic?: string;
-    meaning?: string;
-    sentence?: string;
-    sentence_cn?: string;
-    primaryLanguage?: string;
-    variants?: Record<string, {
-        term?: string;
-        phonetic?: string;
-        meaning?: string;
-        example?: string;
-        exampleTranslation?: string;
-    }>;
-};
 
 export default function FlashcardTraining() {
     const router = useRouter();
@@ -76,26 +60,26 @@ export default function FlashcardTraining() {
                     );
                 }
 
-                const historyItems = Array.isArray(payload) ? payload as HistoryResponseItem[] : [];
+                const historyItems = Array.isArray(payload) ? payload as HistoryApiItem[] : [];
                 const nextCards = historyItems
                     .map((item) => {
-                        const fallbackLanguage = normalizeLanguageCode(item.primaryLanguage ?? storedLanguage);
-                        const variant = item.variants?.[storedLanguage] ?? item.variants?.[fallbackLanguage];
-                        const word = variant?.term || item.word || '';
-                        const meaning = variant?.meaning || item.meaning || '';
+                        const normalized = normalizeHistoryItem(item);
+                        const variant = normalized.variants[storedLanguage];
+                        const word = variant?.term || '';
+                        const meaning = variant?.meaning || '';
 
                         if (!word || !meaning) {
                             return null;
                         }
 
                         return {
-                            id: String(item.id ?? `${fallbackLanguage}-${word}`),
+                            id: String(normalized.id ?? `${storedLanguage}-${word}`),
                             language: storedLanguage,
                             word,
-                            phonetic: variant?.phonetic || item.phonetic || '',
+                            phonetic: variant.phonetic || '',
                             meaning,
-                            sentence: variant?.example || item.sentence || '',
-                            sentence_cn: variant?.exampleTranslation || item.sentence_cn || '',
+                            sentence: variant.example || '',
+                            sentence_cn: variant.exampleTranslation || '',
                         } satisfies WordCard;
                     })
                     .filter((item): item is WordCard => Boolean(item));
