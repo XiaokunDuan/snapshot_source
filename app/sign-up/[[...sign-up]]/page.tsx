@@ -19,7 +19,7 @@ export default function SignUpPage() {
                         className="h-16 mx-auto mb-4"
                     />
                     <h1 className="text-3xl font-bold text-gray-900 mb-2">{copy.auth.signUpTitle}</h1>
-                    <p className="text-gray-600">{copy.auth.signUpDescription}</p>
+                    <p className="text-gray-600">{copy.auth.signUpDescription.replace(/[。.]$/, '')}</p>
                 </div>
 
                 <SignUp

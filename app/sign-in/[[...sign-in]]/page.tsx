@@ -19,7 +19,7 @@ export default function SignInPage() {
                         className="h-16 mx-auto mb-4"
                     />
                     <h1 className="text-3xl font-bold text-gray-900 mb-2">{copy.auth.signInTitle}</h1>
-                    <p className="text-gray-600">{copy.auth.signInDescription}</p>
+                    <p className="text-gray-600">{copy.auth.signInDescription.replace(/[。.]$/, '')}</p>
                 </div>
 
                 <SignIn
