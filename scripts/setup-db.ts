@@ -116,12 +116,81 @@ async function setupDatabase() {
     `);
 
     await client.query(`
+      CREATE TABLE IF NOT EXISTS billing_customers (
+        user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        stripe_customer_id VARCHAR(255) UNIQUE NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS subscriptions (
+        user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        stripe_customer_id VARCHAR(255) NOT NULL,
+        stripe_subscription_id VARCHAR(255) UNIQUE NOT NULL,
+        stripe_price_id VARCHAR(255),
+        status VARCHAR(50) NOT NULL,
+        trial_ends_at TIMESTAMP,
+        current_period_start TIMESTAMP,
+        current_period_end TIMESTAMP,
+        cancel_at_period_end BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS usage_counters (
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        period_start DATE NOT NULL,
+        period_end DATE NOT NULL,
+        monthly_limit INTEGER NOT NULL DEFAULT 100,
+        analyze_count INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        PRIMARY KEY (user_id, period_start)
+      );
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS billing_events (
+        stripe_event_id VARCHAR(255) PRIMARY KEY,
+        event_type VARCHAR(120) NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS rate_limits (
+        identifier VARCHAR(255) NOT NULL,
+        route VARCHAR(120) NOT NULL,
+        window_start TIMESTAMP NOT NULL,
+        request_count INTEGER NOT NULL DEFAULT 1,
+        PRIMARY KEY (identifier, route, window_start)
+      );
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS analytics_events (
+        id BIGSERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        clerk_user_id VARCHAR(255),
+        event_name VARCHAR(100) NOT NULL,
+        properties JSONB DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+
+    await client.query(`
       CREATE INDEX IF NOT EXISTS idx_users_clerk_id ON users(clerk_user_id);
       CREATE INDEX IF NOT EXISTS idx_check_ins_user_date ON check_ins(user_id, check_in_date);
       CREATE INDEX IF NOT EXISTS idx_saved_words_user_book ON saved_words(user_id, word_book_id);
       CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, is_read);
       CREATE INDEX IF NOT EXISTS idx_vocabulary_history_created_at ON vocabulary_history(created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_vocabulary_history_user_created_at ON vocabulary_history(user_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_rate_limits_route_window ON rate_limits(route, window_start DESC);
+      CREATE INDEX IF NOT EXISTS idx_analytics_events_name_created_at ON analytics_events(event_name, created_at DESC);
     `);
 
     console.log('Database setup completed successfully.');

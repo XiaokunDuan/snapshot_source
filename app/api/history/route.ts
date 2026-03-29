@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import * as Sentry from '@sentry/nextjs';
 import { auth } from '@clerk/nextjs/server';
 import {
     createHistoryRecord,
@@ -7,6 +8,7 @@ import {
     resolveHistoryUserId,
     updateHistoryRecord,
 } from '@/lib/history-store';
+import { historyCreateSchema, historyUpdateSchema, parseHistoryId } from '@/lib/history-validation';
 
 export const runtime = 'nodejs';
 
@@ -53,16 +55,15 @@ export async function POST(req: NextRequest) {
             return user.error;
         }
 
-        const body = await req.json();
-        const { word, phonetic, meaning, sentence, sentence_cn, imageUrl } = body;
-
-        if (!word || !meaning) {
+        const parsed = historyCreateSchema.safeParse(await req.json());
+        if (!parsed.success) {
             return NextResponse.json(
-                { error: 'word and meaning are required' },
+                { error: parsed.error.issues[0]?.message || 'Invalid request body' },
                 { status: 400 }
             );
         }
 
+        const { word, phonetic, meaning, sentence, sentence_cn, imageUrl } = parsed.data;
         const result = await createHistoryRecord(user.dbUserId, {
             word,
             phonetic,
@@ -77,6 +78,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(result);
     } catch (error) {
         console.error('[History] POST error:', error);
+        Sentry.captureException(error);
         return NextResponse.json(
             { error: 'Failed to save word', details: error instanceof Error ? error.message : 'Unknown error' },
             { status: 500 }
@@ -95,20 +97,23 @@ export async function DELETE(req: NextRequest) {
         const { searchParams } = new URL(req.url);
         const id = searchParams.get('id');
 
-        if (!id) {
+        const parsedId = parseHistoryId(id);
+
+        if (!parsedId) {
             return NextResponse.json(
-                { error: 'id is required' },
+                { error: 'A numeric id is required' },
                 { status: 400 }
             );
         }
 
-        await deleteHistoryRecord(user.dbUserId, parseInt(id, 10));
+        await deleteHistoryRecord(user.dbUserId, parsedId);
 
         console.log('[History] Deleted word:', id);
 
         return NextResponse.json({ success: true });
     } catch (error) {
         console.error('[History] DELETE error:', error);
+        Sentry.captureException(error);
         return NextResponse.json(
             { error: 'Failed to delete word', details: error instanceof Error ? error.message : 'Unknown error' },
             { status: 500 }
@@ -124,16 +129,15 @@ export async function PUT(req: NextRequest) {
             return user.error;
         }
 
-        const body = await req.json();
-        const { id, word, phonetic, meaning, sentence, sentence_cn } = body;
-
-        if (!id) {
+        const parsed = historyUpdateSchema.safeParse(await req.json());
+        if (!parsed.success) {
             return NextResponse.json(
-                { error: 'id is required' },
+                { error: parsed.error.issues[0]?.message || 'Invalid request body' },
                 { status: 400 }
             );
         }
 
+        const { id, word, phonetic, meaning, sentence, sentence_cn } = parsed.data;
         const result = await updateHistoryRecord(user.dbUserId, {
             id,
             word,
@@ -148,6 +152,7 @@ export async function PUT(req: NextRequest) {
         return NextResponse.json(result);
     } catch (error) {
         console.error('[History] PUT error:', error);
+        Sentry.captureException(error);
         return NextResponse.json(
             { error: 'Failed to update word', details: error instanceof Error ? error.message : 'Unknown error' },
             { status: 500 }

@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
+import * as Sentry from '@sentry/nextjs';
+import { z } from 'zod';
 import { getEnrichedWordData } from '@/lib/mcp/tools';
 import { fetchWithKeyRotation } from '@/lib/gemini';
+import { enforceRateLimit } from '@/lib/rate-limit';
+import { consumeAnalyzeCredit, getBillingStatus } from '@/lib/billing';
+import { requireDbUser } from '@/lib/users';
+import { trackServerEvent } from '@/lib/analytics';
 
-interface AnalyzeRequest {
-    imageUrl: string;
-}
+const analyzeSchema = z.object({
+    imageUrl: z.string().min(1, 'imageUrl is required'),
+});
 
 interface WordResult {
     word: string;
@@ -16,15 +22,44 @@ interface WordResult {
 
 export async function POST(req: NextRequest) {
     try {
-        const body: AnalyzeRequest = await req.json();
-        const { imageUrl } = body;
+        const user = await requireDbUser();
+        const identifier = `user:${user.id}`;
+        const rateLimit = await enforceRateLimit({
+            identifier,
+            route: '/api/analyze',
+            limit: 10,
+            windowSeconds: 600,
+        });
 
-        if (!imageUrl) {
+        if (!rateLimit.allowed) {
             return NextResponse.json(
-                { error: 'imageUrl is required' },
+                { error: 'Rate limit exceeded. Please try again later.' },
+                { status: 429 }
+            );
+        }
+
+        const parsed = analyzeSchema.safeParse(await req.json());
+        if (!parsed.success) {
+            return NextResponse.json(
+                { error: parsed.error.issues[0]?.message || 'Invalid request body' },
                 { status: 400 }
             );
         }
+
+        const billingStatus = await getBillingStatus(user.id);
+        if (!billingStatus.hasAccess) {
+            return NextResponse.json(
+                {
+                    error: billingStatus.subscriptionStatus === 'inactive'
+                        ? 'An active subscription or trial is required'
+                        : 'Your monthly analyze limit has been reached',
+                    billingStatus,
+                },
+                { status: 402 }
+            );
+        }
+
+        const { imageUrl } = parsed.data;
 
         // 构建 Gemini API 请求
         const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
@@ -109,7 +144,7 @@ export async function POST(req: NextRequest) {
         let result: WordResult;
         try {
             result = JSON.parse(generatedText);
-        } catch (parseError) {
+        } catch {
             console.error('[Analyze] Failed to parse JSON:', generatedText);
             return NextResponse.json(
                 { error: 'Invalid JSON response from AI', raw: generatedText },
@@ -126,9 +161,14 @@ export async function POST(req: NextRequest) {
         }
 
         console.log(`[Analyze] Successfully analyzed: ${result.word}`);
+        await consumeAnalyzeCredit(user.id);
 
         // 使用 MCP 获取富化数据
         const enrichedData = await getEnrichedWordData(result.word);
+        await trackServerEvent('analyze_succeeded', {
+            word: result.word,
+            subscriptionStatus: billingStatus.subscriptionStatus,
+        });
 
         return NextResponse.json({
             success: true,
@@ -138,6 +178,10 @@ export async function POST(req: NextRequest) {
 
     } catch (error) {
         console.error('[Analyze] Error:', error);
+        Sentry.captureException(error);
+        await trackServerEvent('analyze_failed', {
+            message: error instanceof Error ? error.message : 'Unknown error',
+        }).catch(() => undefined);
         return NextResponse.json(
             {
                 error: 'Analysis failed',

@@ -1,19 +1,9 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
 import { ThemeProvider } from "./components/ThemeProvider";
+import { LocaleProvider } from "./components/LocaleProvider";
 
 export const metadata: Metadata = {
   title: "Snapshot - AI 学英语",
@@ -33,14 +23,14 @@ export default function RootLayout({
       signUpForceRedirectUrl="/"
     >
       <html lang="zh-CN" suppressHydrationWarning>
-        <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <body className="antialiased">
           <ThemeProvider
             attribute="class"
             defaultTheme="light"
             enableSystem
             disableTransitionOnChange
           >
-            {children}
+            <LocaleProvider>{children}</LocaleProvider>
           </ThemeProvider>
         </body>
       </html>

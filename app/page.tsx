@@ -4,21 +4,21 @@ import { useState, useRef, useEffect } from 'react';
 import { useUser, UserButton } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import Image from 'next/image';
-import { Camera as CameraIcon, BookOpen, TrendingUp, Gift, CheckCircle2, Circle, Award, User as UserIcon, Calendar, Book, Target, Upload, Home as HomeIcon, BarChart3, Loader2, Edit2, Trash2 } from 'lucide-react';
+import { Camera as CameraIcon, BookOpen, TrendingUp, Award, User as UserIcon, Home as HomeIcon, BarChart3, Loader2, Edit2, Trash2, Sparkles, ShieldCheck } from 'lucide-react';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import confetti from 'canvas-confetti';
-import { PageTransition, FadeIn } from '@/components/Animation';
+import { PageTransition } from '@/components/Animation';
 import { AnimatePresence } from 'framer-motion';
 import { ImpactStyle } from '@capacitor/haptics';
-import { Pressable } from '@/components/Pressable';
-import { Skeleton } from '@/components/ui/skeleton';
 import { useHaptics } from '@/hooks/useHaptics';
 import { Capacitor } from '@capacitor/core';
 import SplashScreen from './components/SplashScreen';
 import ChallengeCard from './components/ChallengeCard';
 import CalendarView from './components/CalendarView';
 import { UploadDrawer } from './components/UploadDrawer';
+import { BillingDrawer } from './components/BillingDrawer';
+import { trackClientEvent } from '@/lib/analytics-client';
+import { LocaleToggle, useMessages } from '@/app/components/LocaleProvider';
 
 interface WordResult {
   word: string;
@@ -43,6 +43,18 @@ interface HistoryApiItem {
   sentence_cn: string | null;
   image_url: string | null;
   created_at: string;
+}
+
+interface BillingStatus {
+  subscriptionStatus: string;
+  hasAccess: boolean;
+  monthlyLimit: number;
+  usageCount: number;
+  remaining: number;
+  trialEndsAt: string | null;
+  currentPeriodStart: string | null;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
 }
 
 const HISTORY_CACHE_KEY = 'vocabulary_history';
@@ -95,18 +107,10 @@ function isWordResult(value: unknown): value is WordResult {
   return requiredFields.every((field) => typeof candidate[field] === 'string' && candidate[field]!.toString().trim().length > 0);
 }
 
-interface DailyTask {
-  id: string;
-  title: string;
-  progress: number;
-  total: number;
-  coins: number;
-  completed: boolean;
-}
-
 type TabType = 'home' | 'history' | 'stats' | 'profile';
 
 export default function Home() {
+  const copy = useMessages();
   const { user, isLoaded, isSignedIn } = useUser();
   const router = useRouter();
   const { resolvedTheme, setTheme } = useTheme();
@@ -120,11 +124,10 @@ export default function Home() {
   const [isNative, setIsNative] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>('home');
   const [isDragging, setIsDragging] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [coins, setCoins] = useState(0);
-  const [streak, setStreak] = useState(0);
+  const isUploading = false;
+  const [billing, setBilling] = useState<BillingStatus | null>(null);
+  const [showBillingDrawer, setShowBillingDrawer] = useState(false);
   const [todayStudied, setTodayStudied] = useState(0);
-  const [todayReviewed, setTodayReviewed] = useState(0);
   const [dailyGoal] = useState(10);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -135,6 +138,25 @@ export default function Home() {
   const [showAbout, setShowAbout] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [newName, setNewName] = useState('');
+
+  const refreshBilling = async () => {
+    if (!isSignedIn) {
+      setBilling(null);
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/billing/status');
+      if (!response.ok) {
+        throw new Error(`Billing status failed with ${response.status}`);
+      }
+
+      const data = await response.json();
+      setBilling(data.billing);
+    } catch (error) {
+      console.error('Failed to refresh billing:', error);
+    }
+  };
 
   const handleUpdateName = async () => {
     if (!user || !newName.trim()) return;
@@ -195,12 +217,6 @@ export default function Home() {
   } | null>(null);
   const [checkIns, setCheckIns] = useState<{ date: string; wordsLearned: number }[]>([]);
 
-  const [dailyTasks, setDailyTasks] = useState<DailyTask[]>([
-    { id: '1', title: '完成今日学习计划', progress: 0, total: 1, coins: 10, completed: false },
-    { id: '2', title: '在组合拼写中正确拼写1次', progress: 0, total: 1, coins: 20, completed: false },
-    { id: '3', title: '在中文选词中正确选择10次', progress: 0, total: 10, coins: 30, completed: false },
-  ]);
-
   // Sync user data with database when logged in
   useEffect(() => {
     if (isLoaded && isSignedIn) {
@@ -215,8 +231,8 @@ export default function Home() {
 
           const data = await syncRes.json();
           console.log('User synced:', data);
-          if (data.user && data.user.coins !== undefined) {
-            setCoins(data.user.coins);
+          if (data.billing) {
+            setBilling(data.billing);
           }
 
           const [challengeRes, checkInsRes, historyRes] = await Promise.allSettled([
@@ -290,13 +306,6 @@ export default function Home() {
   useEffect(() => {
     setIsNative(Capacitor.isNativePlatform());
 
-    // 加载游戏数据
-    const savedCoins = localStorage.getItem('user_coins');
-    if (savedCoins) setCoins(parseInt(savedCoins));
-
-    const savedStreak = localStorage.getItem('user_streak');
-    if (savedStreak) setStreak(parseInt(savedStreak));
-
     // Initialize PWA Elements for Camera
     if (typeof window !== 'undefined' && !window.customElements.get('pwa-camera-modal')) {
       import('@ionic/pwa-elements/loader').then(({ defineCustomElements }) => {
@@ -307,6 +316,103 @@ export default function Home() {
 
   if (!isLoaded || showSplash) {
     return <SplashScreen onFinish={() => setShowSplash(false)} />;
+  }
+
+  if (!isSignedIn) {
+    return (
+      <div className="min-h-screen bg-[#f6f1e8] text-gray-900">
+        <main className="mx-auto flex min-h-screen max-w-6xl flex-col justify-between px-6 py-10">
+          <div className="flex items-center justify-between">
+            <img src="/logo-compact.png" alt="Snapshot Logo" className="h-10 w-auto" />
+            <div className="flex items-center gap-3">
+              <LocaleToggle />
+              <button
+                onClick={() => router.push('/sign-in')}
+                className="rounded-full border border-black/10 bg-white px-5 py-2 text-sm font-semibold"
+              >
+                {copy.actions.signIn}
+              </button>
+            </div>
+          </div>
+
+          <section className="grid gap-10 py-10 md:grid-cols-[1.1fr_0.9fr] md:items-center">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm text-gray-600 shadow-sm">
+                <Sparkles className="h-4 w-4 text-lime-600" />
+                {copy.landing.badge}
+              </div>
+              <h1 className="mt-6 text-5xl font-bold leading-tight md:text-6xl">
+                {copy.landing.title}
+              </h1>
+              <p className="mt-6 max-w-xl text-lg text-gray-600">
+                {copy.landing.description}
+              </p>
+              <div className="mt-8 flex flex-wrap gap-4">
+                <button
+                  onClick={() => router.push('/sign-up')}
+                  className="rounded-full bg-gray-900 px-7 py-4 text-sm font-semibold text-white"
+                >
+                  {copy.actions.startFreeTrial}
+                </button>
+                <button
+                  onClick={() => router.push('/sign-in')}
+                  className="rounded-full border border-black/10 bg-white px-7 py-4 text-sm font-semibold"
+                >
+                  {copy.actions.signIn}
+                </button>
+              </div>
+              <div className="mt-8 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-3xl bg-white p-5 shadow-sm">
+                  <div className="text-sm text-gray-500">{copy.landing.monthlyPrice}</div>
+                  <div className="mt-2 text-2xl font-bold">$9.90</div>
+                </div>
+                <div className="rounded-3xl bg-white p-5 shadow-sm">
+                  <div className="text-sm text-gray-500">{copy.landing.trialLabel}</div>
+                  <div className="mt-2 text-2xl font-bold">{copy.landing.trialLength}</div>
+                </div>
+                <div className="rounded-3xl bg-white p-5 shadow-sm">
+                  <div className="text-sm text-gray-500">{copy.landing.quotaLabel}</div>
+                  <div className="mt-2 text-2xl font-bold">{copy.landing.quotaValue}</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-[2rem] bg-white p-6 shadow-xl">
+              <div className="rounded-[1.75rem] bg-[#faf6f0] p-6">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-2xl font-bold">{copy.landing.proTitle}</h2>
+                  <span className="rounded-full bg-black px-3 py-1 text-xs font-semibold text-white">{copy.landing.freeTrialBadge}</span>
+                </div>
+                <div className="mt-6 space-y-3 rounded-3xl bg-white p-4">
+                  <div className="flex items-center justify-between text-sm text-gray-500">
+                    <span>{copy.landing.subtotal}</span>
+                    <span>$9.90 / 月</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm text-gray-500">
+                    <span>{copy.landing.trialCharge}</span>
+                    <span>$9.90</span>
+                  </div>
+                  <div className="border-t border-black/5 pt-3 text-base font-semibold flex items-center justify-between">
+                    <span>{copy.landing.todayDue}</span>
+                    <span>$0.00</span>
+                  </div>
+                </div>
+                <div className="mt-6 space-y-3 text-sm text-gray-600">
+                  <div className="flex items-center gap-3">
+                    <ShieldCheck className="h-4 w-4 text-lime-600" />
+                    {copy.landing.resetFeature}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <ShieldCheck className="h-4 w-4 text-lime-600" />
+                    {copy.landing.monitoringFeature}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
+    );
   }
 
 
@@ -488,25 +594,9 @@ export default function Home() {
           .catch(err => console.error('Failed to create check-in:', err));
       }
 
-      // 增加金币奖励
-      const newCoins = coins + 5;
-      setCoins(newCoins);
-      localStorage.setItem('user_coins', newCoins.toString());
-
       // 更新今日学习数
       setTodayStudied(prev => prev + 1);
-
-      // 更新任务进度
-      setDailyTasks(prev => prev.map(task => {
-        if (task.id === '1' && todayStudied + 1 >= dailyGoal) {
-          return { ...task, progress: 1, completed: true };
-        }
-        if (task.id === '3') {
-          const newProgress = Math.min(task.progress + 1, task.total);
-          return { ...task, progress: newProgress, completed: newProgress >= task.total };
-        }
-        return task;
-      }));
+      void refreshBilling();
 
       const historyItem: HistoryItem = {
         ...wordResult,
@@ -589,14 +679,6 @@ export default function Home() {
       image.onerror = () => reject(new Error('Failed to load image'));
       image.src = src;
     });
-
-  const handleUploadClick = () => {
-    if (isNative) {
-      pickFromGallery();
-    } else {
-      fileInputRef.current?.click();
-    }
-  };
 
   const stats = {
     total: history.length,
@@ -780,6 +862,33 @@ export default function Home() {
                       <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">个单词</div>
                     </div>
                   </div>
+
+                  {billing && (
+                    <div className="rounded-3xl bg-[#1d1a15] p-6 text-white shadow-sm">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.2em] text-white/60">Snapshot Pro</p>
+                          <h3 className="mt-2 text-2xl font-bold">
+                            {billing.subscriptionStatus === 'inactive' ? '开始 3 天免费试用' : `剩余 ${billing.remaining} 次识别`}
+                          </h3>
+                          <p className="mt-2 text-sm text-white/70">
+                            {billing.subscriptionStatus === 'inactive'
+                              ? '试用结束后 $9.90/月，每月 100 次 AI 图片分析额度。'
+                              : `当前状态：${billing.subscriptionStatus}，本周期已用 ${billing.usageCount}/${billing.monthlyLimit}`}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setShowBillingDrawer(true);
+                            void trackClientEvent('billing_cta_clicked', { location: 'home_card' });
+                          }}
+                          className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-black"
+                        >
+                          {billing.subscriptionStatus === 'inactive' ? '开始试用' : '查看订阅'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
 
@@ -1192,6 +1301,33 @@ export default function Home() {
               <div className="space-y-3">
                 {/* Learning Reminder Removed */}
 
+                {billing && (
+                  <div className="rounded-3xl bg-[#f8f4ee] p-5 shadow-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">会员与额度</p>
+                        <p className="mt-1 text-sm text-gray-500">
+                          状态：{billing.subscriptionStatus}，剩余 {billing.remaining}/{billing.monthlyLimit}
+                        </p>
+                        {billing.trialEndsAt && (
+                          <p className="mt-1 text-xs text-gray-400">
+                            试用结束：{new Date(billing.trialEndsAt).toLocaleString('zh-CN')}
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => {
+                          setShowBillingDrawer(true);
+                          void trackClientEvent('billing_cta_clicked', { location: 'profile_card' });
+                        }}
+                        className="rounded-full bg-gray-900 px-4 py-2 text-xs font-semibold text-white"
+                      >
+                        {billing.subscriptionStatus === 'inactive' ? '升级' : '查看'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <div className="bg-white dark:bg-wise-card-dark rounded-3xl p-5 shadow-sm flex items-center justify-between transition-colors duration-300">
                   <span className="text-gray-900 dark:text-white font-medium">深色模式</span>
                   <button
@@ -1278,6 +1414,14 @@ export default function Home() {
           </div>
         </div>
       </nav>
+
+      <BillingDrawer
+        open={showBillingDrawer}
+        onClose={() => setShowBillingDrawer(false)}
+        onSuccess={() => {
+          void refreshBilling();
+        }}
+      />
     </div>
   );
 }

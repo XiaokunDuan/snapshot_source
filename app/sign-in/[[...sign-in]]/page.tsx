@@ -1,17 +1,25 @@
+'use client';
+
 import { SignIn } from "@clerk/nextjs";
+import { LocaleToggle, useMessages } from "@/app/components/LocaleProvider";
 
 export default function SignInPage() {
+    const copy = useMessages();
+
     return (
         <div className="min-h-screen bg-gradient-to-br from-lime-50 via-white to-emerald-50 dark:from-[#11161c] dark:via-[#0e1217] dark:to-[#16211a] flex items-center justify-center p-4 transition-colors duration-300">
             <div className="w-full max-w-md">
+                <div className="mb-6 flex justify-center">
+                    <LocaleToggle />
+                </div>
                 <div className="text-center mb-8">
                     <img
                         src="/logo.png"
                         alt="Snapshot Logo"
                         className="h-16 mx-auto mb-4"
                     />
-                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">欢迎回来</h1>
-                    <p className="text-gray-600 dark:text-gray-300">登录继续你的学习之旅</p>
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">{copy.auth.signInTitle}</h1>
+                    <p className="text-gray-600 dark:text-gray-300">{copy.auth.signInDescription}</p>
                 </div>
 
                 <SignIn

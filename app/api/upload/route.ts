@@ -1,13 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
+import * as Sentry from '@sentry/nextjs';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { randomUUID } from 'crypto';
+import { requireDbUser } from '@/lib/users';
+import { enforceRateLimit } from '@/lib/rate-limit';
+import { trackServerEvent } from '@/lib/analytics';
 
 export async function POST(req: NextRequest) {
     try {
+        const user = await requireDbUser();
+        const rateLimit = await enforceRateLimit({
+            identifier: `user:${user.id}`,
+            route: '/api/upload',
+            limit: 20,
+            windowSeconds: 600,
+        });
+
+        if (!rateLimit.allowed) {
+            return NextResponse.json(
+                { error: 'Rate limit exceeded. Please try again later.' },
+                { status: 429 }
+            );
+        }
+
         // 获取环境变量
         const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID;
         const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID;
         const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY;
+        const bucketName = process.env.R2_BUCKET_NAME || 'word-app-images';
 
         if (!R2_ACCOUNT_ID || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY) {
             return NextResponse.json(
@@ -62,7 +82,7 @@ export async function POST(req: NextRequest) {
 
         // 上传到 R2
         const uploadCommand = new PutObjectCommand({
-            Bucket: 'word-app-images',
+            Bucket: bucketName,
             Key: uniqueFilename,
             Body: buffer,
             ContentType: detectedMimeType,
@@ -74,6 +94,10 @@ export async function POST(req: NextRequest) {
         const publicUrl = `${cdnBase}/${uniqueFilename}`;
 
         console.log(`[Upload] Successfully uploaded: ${uniqueFilename}`);
+        await trackServerEvent('upload_succeeded', {
+            filename: uniqueFilename,
+            mimeType: detectedMimeType,
+        });
 
         return NextResponse.json({
             success: true,
@@ -83,6 +107,7 @@ export async function POST(req: NextRequest) {
 
     } catch (error) {
         console.error('[Upload] Error:', error);
+        Sentry.captureException(error);
         return NextResponse.json(
             {
                 error: 'Upload failed',

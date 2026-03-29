@@ -74,6 +74,7 @@ TEXT_MODEL=
 R2_ACCOUNT_ID=
 R2_ACCESS_KEY_ID=
 R2_SECRET_ACCESS_KEY=
+R2_BUCKET_NAME=word-app-images
 DATABASE_URL=
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
 CLERK_SECRET_KEY=
@@ -82,6 +83,13 @@ NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
 NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/
 NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/
 CDN_PUBLIC_BASE_URL=
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=
+STRIPE_SECRET_KEY=
+STRIPE_PRICE_ID=
+STRIPE_WEBHOOK_SECRET=
+NEXT_PUBLIC_SENTRY_DSN=
+SENTRY_DSN=
+NEXT_PUBLIC_APP_ENV=development
 ```
 
 Optional:
@@ -89,6 +97,12 @@ Optional:
 ```bash
 MCP_WIKI_ENABLED=false
 BRAVE_API_KEY=
+SENTRY_ORG=
+SENTRY_PROJECT=
+SENTRY_TRACES_SAMPLE_RATE=0.2
+NEXT_PUBLIC_SENTRY_TRACES_SAMPLE_RATE=0.2
+RESEND_API_KEY=
+RESEND_FROM_EMAIL=
 ```
 
 ## Database Scripts
@@ -124,6 +138,7 @@ vercel --prod
 ## Current Notes
 
 - Web is the primary deployment path
-- `/api/upload` still uses the hardcoded R2 bucket name `word-app-images`
-- `/api/history` is still not multi-user safe enough for a public launch and should be hardened before a broader release
-- `middleware.ts` should eventually be migrated to the Next.js `proxy` convention
+- `/api/analyze` and `/api/upload` are now protected by auth and database-backed rate limiting
+- `/api/history` is scoped by `user_id`; remaining work is operational hardening, not a cross-user data leak fix
+- Billing uses Stripe subscriptions with a `3-day trial` flow and a server-tracked monthly analyze quota
+- Sentry, Stripe, and Resend all require production environment variables before deployment

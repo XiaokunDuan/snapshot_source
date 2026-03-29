@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import * as Sentry from '@sentry/nextjs';
 import { auth, currentUser } from '@clerk/nextjs/server';
-import { Pool } from '@neondatabase/serverless';
+import { getPool } from '@/lib/db';
+import { getBillingStatus } from '@/lib/billing';
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const pool = getPool();
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
     try {
         const authResult = await auth();
         const userId = authResult.userId;
@@ -81,7 +83,8 @@ export async function GET(request: NextRequest) {
                     username: dbUser.username,
                     avatar_url: dbUser.avatar_url,
                     coins: dbUser.coins || 0
-                }
+                },
+                billing: await getBillingStatus(dbUser.id),
             });
 
         } finally {
@@ -90,6 +93,7 @@ export async function GET(request: NextRequest) {
 
     } catch (error) {
         console.error('User sync error:', error);
+        Sentry.captureException(error);
         return NextResponse.json(
             { error: 'Failed to sync user data' },
             { status: 500 }
