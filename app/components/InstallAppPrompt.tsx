@@ -4,8 +4,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { Download, Share2, Smartphone, X } from 'lucide-react';
 import { useMessages } from '@/app/components/LocaleProvider';
 
-const DISMISS_KEY = 'snapshot_install_prompt_dismissed_session';
-
 type DeferredInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
@@ -22,6 +20,7 @@ function isStandaloneDisplay() {
 export function InstallAppPrompt({ enabled }: { enabled: boolean }) {
   const copy = useMessages();
   const [open, setOpen] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<DeferredInstallPromptEvent | null>(null);
   const isIosMobile = useMemo(() => {
     if (typeof window === 'undefined') {
@@ -41,8 +40,8 @@ export function InstallAppPrompt({ enabled }: { enabled: boolean }) {
       return false;
     }
 
-    return !window.sessionStorage.getItem(DISMISS_KEY);
-  }, [enabled]);
+    return !dismissed;
+  }, [dismissed, enabled]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !canShow) {
@@ -73,9 +72,7 @@ export function InstallAppPrompt({ enabled }: { enabled: boolean }) {
   }, [canShow, isIosMobile]);
 
   const dismiss = () => {
-    if (typeof window !== 'undefined') {
-      window.sessionStorage.setItem(DISMISS_KEY, '1');
-    }
+    setDismissed(true);
     setOpen(false);
   };
 
