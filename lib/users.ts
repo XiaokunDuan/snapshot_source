@@ -10,6 +10,14 @@ export interface AppUser {
   coins: number;
 }
 
+function buildDisplayName(user: Awaited<ReturnType<typeof currentUser>>) {
+  if (!user) {
+    return 'User';
+  }
+
+  return user.username || user.firstName || user.lastName || 'User';
+}
+
 async function ensureUsersTable(client: DbClient) {
   await client.query(`
     CREATE TABLE IF NOT EXISTS users (
@@ -66,26 +74,73 @@ export async function ensureDbUserFromClerkId(clerkUserId: string, client?: DbCl
     if (!email) {
       throw new Error('Clerk user is missing an email address');
     }
+    const displayName = buildDisplayName(user);
+    const avatarUrl = user.imageUrl || '';
+
+    const byEmail = await activeClient.query(
+      'SELECT * FROM users WHERE email = $1 LIMIT 1',
+      [email]
+    );
+
+    if (byEmail.rows[0]) {
+      const rebound = await activeClient.query(
+        `UPDATE users
+         SET clerk_user_id = $1,
+             username = $2,
+             avatar_url = $3,
+             updated_at = NOW()
+         WHERE email = $4
+         RETURNING *`,
+        [clerkUserId, displayName, avatarUrl, email]
+      );
+
+      return rebound.rows[0] as AppUser;
+    }
 
     const created = await activeClient.query(
       `INSERT INTO users (clerk_user_id, email, username, avatar_url, created_at, updated_at)
        VALUES ($1, $2, $3, $4, NOW(), NOW())
-       ON CONFLICT (clerk_user_id)
-       DO UPDATE SET
-         email = EXCLUDED.email,
-         username = EXCLUDED.username,
-         avatar_url = EXCLUDED.avatar_url,
-         updated_at = NOW()
        RETURNING *`,
-      [
-        clerkUserId,
-        email,
-        user.username || user.firstName || 'User',
-        user.imageUrl || '',
-      ]
+      [clerkUserId, email, displayName, avatarUrl]
     );
 
     return created.rows[0] as AppUser;
+  } finally {
+    if (!client) {
+      activeClient.release();
+    }
+  }
+}
+
+export async function ensureUserScaffolding(userId: number, client?: DbClient) {
+  const activeClient = client ?? await getPool().connect() as DbClient;
+
+  try {
+    const wordBookResult = await activeClient.query(
+      'SELECT id FROM word_books WHERE user_id = $1 AND is_default = TRUE LIMIT 1',
+      [userId]
+    );
+
+    if (!wordBookResult.rows[0]) {
+      await activeClient.query(
+        `INSERT INTO word_books (user_id, name, description, is_default, created_at)
+         VALUES ($1, $2, $3, TRUE, NOW())`,
+        [userId, '我的收藏', '默认单词本']
+      );
+    }
+
+    const challengeResult = await activeClient.query(
+      "SELECT id FROM learning_challenges WHERE user_id = $1 AND status = 'active' LIMIT 1",
+      [userId]
+    );
+
+    if (!challengeResult.rows[0]) {
+      await activeClient.query(
+        `INSERT INTO learning_challenges (user_id, challenge_type, target_days, current_streak, max_streak, shield_cards, status, started_at)
+         VALUES ($1, 'streak', 30, 0, 0, 0, 'active', NOW())`,
+        [userId]
+      );
+    }
   } finally {
     if (!client) {
       activeClient.release();
