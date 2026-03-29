@@ -12,6 +12,7 @@
   --editorial-border: rgba(22, 21, 17, 0.12);
   --editorial-panel: rgba(255, 255, 255, 0.78);
   --editorial-accent: #d7ff64;
+  --editorial-soft-shadow: 0 16px 48px rgba(23, 21, 17, 0.06);
 }
 
 @theme inline {
@@ -22,18 +23,6 @@
   --color-wise-card-dark: var(--wise-card-dark);
   --font-sans: var(--font-inter), "Avenir Next", "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", "SFMono-Regular", monospace;
-}
-
-/* Class-based dark mode for next-themes */
-.dark {
-  --background: var(--wise-dark-bg);
-  --foreground: #ededed;
-  --editorial-paper: #11161b;
-  --editorial-ink: #f2efe5;
-  --editorial-muted: rgba(232, 227, 214, 0.64);
-  --editorial-border: rgba(226, 234, 213, 0.1);
-  --editorial-panel: rgba(24, 31, 37, 0.88);
-  --editorial-accent: #c6ea7a;
 }
 
 body {
@@ -54,16 +43,9 @@ h4,
 
 .editorial-shell {
   background:
-    radial-gradient(circle at top left, rgba(215, 255, 100, 0.18), transparent 26%),
-    radial-gradient(circle at bottom right, rgba(18, 35, 57, 0.1), transparent 30%),
-    linear-gradient(180deg, color-mix(in srgb, var(--editorial-paper) 96%, black 4%), var(--editorial-paper));
-}
-
-.dark .editorial-shell {
-  background:
-    radial-gradient(circle at top left, rgba(198, 234, 122, 0.1), transparent 22%),
-    radial-gradient(circle at bottom right, rgba(86, 110, 92, 0.12), transparent 28%),
-    linear-gradient(180deg, #11161b, #131920 42%, #171d24 100%);
+    radial-gradient(circle at top left, rgba(215, 255, 100, 0.16), transparent 24%),
+    radial-gradient(circle at bottom right, rgba(127, 157, 118, 0.08), transparent 26%),
+    linear-gradient(180deg, #f6f1e8 0%, #f3efe6 48%, #f2ede4 100%);
 }
 
 .editorial-grid {
@@ -76,13 +58,9 @@ h4,
 .editorial-panel {
   background: var(--editorial-panel);
   border: 1px solid var(--editorial-border);
-  border-radius: 2rem;
+  border-radius: 2.25rem;
   backdrop-filter: blur(20px);
-  box-shadow: 0 12px 60px rgba(18, 24, 38, 0.08);
-}
-
-.dark .editorial-panel {
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+  box-shadow: var(--editorial-soft-shadow);
 }
 
 .editorial-rail {
@@ -118,17 +96,6 @@ h4,
   border-color: color-mix(in srgb, var(--editorial-accent) 70%, black 10%);
 }
 
-.dark .editorial-language-tab {
-  background: rgba(255, 255, 255, 0.03);
-  color: rgba(242, 239, 229, 0.7);
-}
-
-.dark .image-soften {
-  mix-blend-mode: screen;
-  filter: contrast(0.9) saturate(0.72) brightness(0.82);
-  opacity: 0.82;
-}
-
 .editorial-float {
   animation: editorialFloat 8s ease-in-out infinite;
 }
@@ -147,9 +114,8 @@ h4,
   50% { transform: scale(1.01); opacity: 0.96; }
 }
 
-.dark input,
-.dark textarea,
-.dark button,
-.dark select {
-  color-scheme: dark;
+.image-soften {
+  mix-blend-mode: multiply;
+  filter: contrast(0.88) saturate(0.84) brightness(1.02);
+  opacity: 0.94;
 }

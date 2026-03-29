@@ -3,7 +3,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { SignOutButton, useUser, UserButton } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
-import { useTheme } from 'next-themes';
 import { Camera as CameraIcon, BookOpen, TrendingUp, Award, User as UserIcon, Home as HomeIcon, BarChart3, Loader2, Edit2, Trash2, Sparkles, ShieldCheck, X, MoveDown } from 'lucide-react';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import confetti from 'canvas-confetti';
@@ -156,7 +155,6 @@ export default function Home() {
   const { locale, setLocale } = useLocale();
   const { user, isLoaded, isSignedIn } = useUser();
   const router = useRouter();
-  const { resolvedTheme, setTheme } = useTheme();
   const { impact, notification, selection } = useHaptics();
   const [showSplash, setShowSplash] = useState(true);
 
@@ -414,9 +412,9 @@ export default function Home() {
     landingHeroBody: 'Capture a real scene, extract the core object, switch languages, and archive it into the libraries you care about.',
     landingLearnFirst: 'Learn the flow first',
     landingSectionTitle: 'What you get first',
-    landingSectionBody: 'Use the product before you think about paying. Login comes later, and upgrade stays inside the app.',
-    landingReadyTitle: 'Only sign in when you are ready to learn.',
-    landingReadyBody: 'Google or GitHub sign-in unlocks your free analyses. Upgrade appears later, only after you start using the product.',
+    landingSectionBody: 'Capture vocabulary from real scenes and turn it into a study flow you can return to.',
+    landingReadyTitle: 'Sign in when you want to keep your progress in sync.',
+    landingReadyBody: 'Google or GitHub sign-in unlocks your personal archive, language libraries, and saved progress across devices.',
     freeTag: '20 free analyses',
     multiTag: '5 language libraries',
     deskTitle: 'Drop an image into the learning desk',
@@ -433,8 +431,8 @@ export default function Home() {
     uploadTag1: 'AI extraction',
     uploadTag2: 'Archive ready',
     promoTitleFree: (remaining: number) => `${remaining} free analyses left`,
-    promoTextFree: 'Use the free tier first. Upgrade only when you want more capacity.',
-    promoCtaFree: 'Learn about Pro',
+    promoTextFree: 'Get higher monthly credits, uninterrupted image analysis, and a fuller learning archive.',
+    promoCtaFree: 'View membership',
     resultObject: 'Detected object',
     example: 'Example',
     pronunciation: 'Pronunciation & usage',
@@ -449,8 +447,7 @@ export default function Home() {
     targetLibraries: 'Save to language libraries',
     targetLibrariesHint: 'Selected languages are saved automatically after each photo, and each result is added to those matching libraries.',
     membership: 'Membership',
-    freeStatus: (remaining: number, limit: number) => `Free tier active · ${remaining}/${limit} analyses left`,
-    darkMode: 'Dark mode',
+    freeStatus: (remaining: number, limit: number) => `Free tier · ${remaining}/${limit} analyses left`,
     about: 'About',
     signOut: 'Sign out',
     editName: 'Edit name',
@@ -506,9 +503,9 @@ export default function Home() {
     landingHeroBody: '拍下真实世界里的一个物体或概念，提炼它，再切换不同语言保存进你选中的语言库。',
     landingLearnFirst: '先理解流程',
     landingSectionTitle: '你先得到什么',
-    landingSectionBody: '先用，再决定要不要付费。登录放后面，升级也只在应用里面出现。',
-    landingReadyTitle: '准备开始学的时候，再去登录。',
-    landingReadyBody: '用 Google 或 GitHub 登录后，会先拿到免费识图额度。只有当你真的开始用，并且需要扩容时，才会看到升级入口。',
+    landingSectionBody: '从真实场景里捕捉词汇，再把它整理成可以反复回看的学习流程。',
+    landingReadyTitle: '准备长期记录时，再登录同步。',
+    landingReadyBody: '用 Google 或 GitHub 登录后，可以同步你的历史记录、语言库和学习进度。',
     freeTag: '20 次免费识图',
     multiTag: '5 个语言库',
     deskTitle: '把一张图放进学习台',
@@ -525,8 +522,8 @@ export default function Home() {
     uploadTag1: 'AI 提炼',
     uploadTag2: '自动归档',
     promoTitleFree: (remaining: number) => `还剩 ${remaining} 次免费识图`,
-    promoTextFree: '先把免费额度用起来。之后如果你想继续扩容，再开启 3 天试用。',
-    promoCtaFree: '了解 Pro',
+    promoTextFree: '解锁更高月额度、连续识图能力，以及更完整的学习档案。',
+    promoCtaFree: '查看会员',
     resultObject: '识别对象',
     example: '例句',
     pronunciation: '发音与用法',
@@ -541,8 +538,7 @@ export default function Home() {
     targetLibraries: '保存到语言库',
     targetLibrariesHint: '你勾选的语言会在每次拍照后自动保存到对应语言库里，后面翻记录时会直接按这些库来归档。',
     membership: '会员与额度',
-    freeStatus: (remaining: number, limit: number) => `当前是免费层，剩余 ${remaining}/${limit} 次识图额度`,
-    darkMode: '深色模式',
+    freeStatus: (remaining: number, limit: number) => `免费层 · 剩余 ${remaining}/${limit} 次识图额度`,
     about: '关于应用',
     signOut: '退出登录',
     editName: '修改昵称',
@@ -1418,7 +1414,81 @@ export default function Home() {
                     </div>
                   </UploadDrawer>
 
-                  <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+                  <div className="grid gap-4 lg:grid-cols-[1.12fr_0.88fr]">
+                    <div className="order-first space-y-4 lg:order-last">
+                      {showHomeOffer && billing && (
+                        <div className="editorial-panel relative overflow-hidden p-5 sm:p-6">
+                          <button
+                            onClick={() => {
+                              playTap();
+                              setDismissedHomePromo(true);
+                              if (typeof window !== 'undefined') {
+                                window.localStorage.setItem(HOME_PROMO_DISMISSED_KEY, '1');
+                              }
+                            }}
+                            className="absolute right-4 top-4 rounded-full border border-[var(--editorial-border)] bg-[var(--editorial-panel)] p-2 text-[var(--editorial-muted)] transition hover:text-[var(--editorial-ink)]"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                          <div className="pr-10">
+                            <p className="editorial-caption">
+                              {billing.subscriptionStatus === 'free'
+                                ? (locale === 'en' ? 'Membership' : '会员方案')
+                                : 'Snapshot Pro'}
+                            </p>
+                            <h3 className="editorial-serif mt-3 text-3xl font-semibold leading-tight">
+                              {billing.subscriptionStatus === 'free'
+                                ? ui.promoTitleFree(billing.remaining)
+                                : (locale === 'en' ? `${billing.remaining} analyses left` : `剩余 ${billing.remaining} 次识图`)}
+                            </h3>
+                            <p className="mt-3 text-sm leading-7 text-[var(--editorial-muted)]">
+                              {billing.subscriptionStatus === 'free'
+                                ? ui.promoTextFree
+                                : (locale === 'en'
+                                  ? `Current plan: ${billing.subscriptionStatus}. ${billing.remaining} analyses remain this cycle.`
+                                  : `当前方案：${billing.subscriptionStatus}。本周期还可继续使用 ${billing.remaining} 次识图。`)}
+                            </p>
+                          </div>
+                          <div className="mt-5 flex items-center justify-between gap-3 rounded-[1.5rem] border border-[var(--editorial-border)] bg-[rgba(255,255,255,0.45)] px-4 py-3">
+                            <div>
+                              <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--editorial-muted)]">
+                                {locale === 'en' ? 'Plan' : '方案'}
+                              </p>
+                              <p className="mt-1 text-sm font-medium text-[var(--editorial-ink)]">
+                                {billing.subscriptionStatus === 'free'
+                                  ? (locale === 'en' ? '3-day trial available' : '可开启 3 天试用')
+                                  : (locale === 'en' ? 'Manage subscription' : '管理当前订阅')}
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => {
+                                playTap();
+                                setShowBillingDrawer(true);
+                                void trackClientEvent('billing_cta_clicked', { location: 'home_chip' });
+                              }}
+                              className="rounded-full bg-[var(--editorial-ink)] px-4 py-2 text-xs font-semibold text-[var(--editorial-paper)]"
+                            >
+                              {billing.subscriptionStatus === 'free' ? ui.promoCtaFree : ui.billingView}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="editorial-panel p-5 sm:p-6">
+                        <p className="editorial-caption">
+                          {locale === 'en' ? 'Capture companion' : '识图伴随卡'}
+                        </p>
+                        <h3 className="editorial-serif mt-3 text-2xl font-semibold">
+                          {locale === 'en' ? 'Image analysis stays one tap away.' : '上传旁边保留一个轻量会员入口。'}
+                        </h3>
+                        <p className="mt-3 text-sm leading-7 text-[var(--editorial-muted)]">
+                          {locale === 'en'
+                            ? 'When you want more monthly credits, open membership right next to the upload stage instead of hunting through settings.'
+                            : '当你需要更多月额度时，可以直接在上传区旁边打开会员，不需要再去设置里寻找入口。'}
+                        </p>
+                      </div>
+                    </div>
+
                     <div className="grid grid-cols-2 gap-4">
                       <div className="editorial-panel">
                         <div className="mb-4 flex items-center gap-3">
@@ -1441,52 +1511,6 @@ export default function Home() {
                         <div className="mt-1 text-sm text-[var(--editorial-muted)]">{locale === 'en' ? 'Entries recognised and saved' : '累计识别并保存的词条'}</div>
                       </div>
                     </div>
-
-                    {showHomeOffer && billing && (
-                      <div className="editorial-panel relative overflow-hidden bg-[linear-gradient(135deg,rgba(28,25,20,0.96),rgba(45,42,33,0.92))] p-6 text-white shadow-sm">
-                        <button
-                          onClick={() => {
-                            playTap();
-                            setDismissedHomePromo(true);
-                            if (typeof window !== 'undefined') {
-                              window.localStorage.setItem(HOME_PROMO_DISMISSED_KEY, '1');
-                            }
-                          }}
-                          className="absolute right-4 top-4 rounded-full border border-white/10 bg-white/5 p-2 text-white/70 transition hover:text-white"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                        <div className="flex items-start justify-between gap-4 pr-10">
-                          <div>
-                            <p className="text-xs uppercase tracking-[0.2em] text-white/60">
-                              {billing.subscriptionStatus === 'free' ? 'Optional upgrade' : 'Snapshot Pro'}
-                            </p>
-                            <h3 className="editorial-serif mt-3 text-3xl font-semibold leading-tight">
-                              {billing.subscriptionStatus === 'free'
-                                ? ui.promoTitleFree(billing.remaining)
-                                : (locale === 'en' ? `${billing.remaining} analyses left` : `剩余 ${billing.remaining} 次识别`)}
-                            </h3>
-                            <p className="mt-3 text-sm leading-7 text-white/70">
-                              {billing.subscriptionStatus === 'free'
-                                ? ui.promoTextFree
-                                : (locale === 'en'
-                                  ? `Status: ${billing.subscriptionStatus}. Used ${billing.usageCount}/${billing.monthlyLimit} this cycle.`
-                                  : `当前状态：${billing.subscriptionStatus}，本周期已用 ${billing.usageCount}/${billing.monthlyLimit}`)}
-                            </p>
-                          </div>
-                          <button
-                            onClick={() => {
-                              playTap();
-                              setShowBillingDrawer(true);
-                              void trackClientEvent('billing_cta_clicked', { location: 'home_card' });
-                            }}
-                            className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-black"
-                          >
-                            {billing.subscriptionStatus === 'free' ? ui.promoCtaFree : (locale === 'en' ? 'View subscription' : '查看订阅')}
-                          </button>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 </>
               )}
@@ -2092,19 +2116,6 @@ export default function Home() {
                     </div>
                   </div>
                 )}
-
-                <div className="editorial-panel flex items-center justify-between p-5">
-                  <span className="font-medium">{ui.darkMode}</span>
-                  <button
-                    onClick={() => {
-                      playTap();
-                      setTheme(resolvedTheme === 'dark' ? 'light' : 'dark');
-                    }}
-                    className={`relative h-6 w-11 rounded-full transition-colors ${resolvedTheme === 'dark' ? 'bg-[var(--editorial-accent)]' : 'bg-gray-200'}`}
-                  >
-                    <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-all ${resolvedTheme === 'dark' ? 'left-6' : 'left-1'}`}></div>
-                  </button>
-                </div>
 
                 <button
                   onClick={() => {
