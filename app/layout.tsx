@@ -15,6 +15,21 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const content = (
+    <html lang="zh-CN" suppressHydrationWarning>
+      <body className="antialiased">
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="light"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <LocaleProvider>{children}</LocaleProvider>
+        </ThemeProvider>
+      </body>
+    </html>
+  );
+
   return (
     <ClerkProvider
       signInUrl="/sign-in"
@@ -22,18 +37,7 @@ export default function RootLayout({
       signInForceRedirectUrl="/"
       signUpForceRedirectUrl="/"
     >
-      <html lang="zh-CN" suppressHydrationWarning>
-        <body className="antialiased">
-          <ThemeProvider
-            attribute="class"
-            defaultTheme="light"
-            enableSystem
-            disableTransitionOnChange
-          >
-            <LocaleProvider>{children}</LocaleProvider>
-          </ThemeProvider>
-        </body>
-      </html>
+      {content}
     </ClerkProvider>
   );
 }
