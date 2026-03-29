@@ -431,8 +431,8 @@ export default function Home() {
     uploadTag1: 'AI extraction',
     uploadTag2: 'Archive ready',
     promoTitleFree: (remaining: number) => `${remaining} free analyses left`,
-    promoTextFree: 'Get higher monthly credits, uninterrupted image analysis, and a fuller learning archive.',
-    promoCtaFree: 'View membership',
+    promoTextFree: 'Unlock more monthly credits and a fuller study archive when you need more room.',
+    promoCtaFree: 'Membership',
     resultObject: 'Detected object',
     example: 'Example',
     pronunciation: 'Pronunciation & usage',
@@ -522,8 +522,8 @@ export default function Home() {
     uploadTag1: 'AI 提炼',
     uploadTag2: '自动归档',
     promoTitleFree: (remaining: number) => `还剩 ${remaining} 次免费识图`,
-    promoTextFree: '解锁更高月额度、连续识图能力，以及更完整的学习档案。',
-    promoCtaFree: '查看会员',
+    promoTextFree: '需要更多额度时，再开启会员方案即可。',
+    promoCtaFree: '会员方案',
     resultObject: '识别对象',
     example: '例句',
     pronunciation: '发音与用法',
@@ -841,7 +841,8 @@ export default function Home() {
 
       const imageDataUrl = image.dataUrl;
       if (imageDataUrl) {
-        await analyzeImage(imageDataUrl);
+        const optimizedImage = await optimizeDataUrlForAnalysis(imageDataUrl);
+        await analyzeImage(optimizedImage);
       }
     } catch (error) {
       console.error('Camera error:', error);
@@ -860,7 +861,8 @@ export default function Home() {
 
       const imageDataUrl = image.dataUrl;
       if (imageDataUrl) {
-        await analyzeImage(imageDataUrl);
+        const optimizedImage = await optimizeDataUrlForAnalysis(imageDataUrl);
+        await analyzeImage(optimizedImage);
       }
     } catch (error) {
       console.error('Gallery error:', error);
@@ -898,7 +900,7 @@ export default function Home() {
       });
 
       if (!analyzeRes.ok) {
-        const errorData = await analyzeRes.json();
+        const errorData = await parseApiErrorResponse(analyzeRes);
         console.error('Analysis error:', JSON.stringify(errorData, null, 2));
         if (analyzeRes.status === 402) {
           setCurrentImage(null);
@@ -1164,6 +1166,10 @@ export default function Home() {
 
   const optimizeImageForAnalysis = async (file: File) => {
     const dataUrl = await readFileAsDataUrl(file);
+    return optimizeDataUrlForAnalysis(dataUrl);
+  };
+
+  const optimizeDataUrlForAnalysis = async (dataUrl: string) => {
     const image = await loadImage(dataUrl);
     const maxDimension = 1280;
     const scale = Math.min(1, maxDimension / Math.max(image.width, image.height));
@@ -1181,6 +1187,19 @@ export default function Home() {
 
     ctx.drawImage(image, 0, 0, width, height);
     return canvas.toDataURL('image/jpeg', 0.82);
+  };
+
+  const parseApiErrorResponse = async (response: Response) => {
+    const rawText = await response.text();
+
+    try {
+      return JSON.parse(rawText) as { error?: string; details?: string };
+    } catch {
+      return {
+        error: response.status >= 500 ? 'Server error' : 'Request failed',
+        details: rawText.slice(0, 240) || response.statusText,
+      };
+    }
   };
 
   const readFileAsDataUrl = (file: File) =>
@@ -1385,6 +1404,18 @@ export default function Home() {
                         />
                       )}
 
+                      <button
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          playTap();
+                          setShowBillingDrawer(true);
+                          void trackClientEvent('billing_cta_clicked', { location: 'upload_chip' });
+                        }}
+                        className="absolute right-5 top-5 rounded-full bg-[var(--editorial-ink)] px-4 py-2 text-xs font-semibold text-[var(--editorial-paper)] shadow-sm outline-none focus:outline-none focus-visible:outline-none"
+                      >
+                        {ui.membership}
+                      </button>
+
                       <div className="grid gap-8 md:grid-cols-[0.9fr_1.1fr] md:items-center">
                         <div className="relative">
                           <div className="absolute inset-0 rounded-[2rem] bg-[radial-gradient(circle_at_center,rgba(149,199,85,0.18),transparent_70%)]" />
@@ -1431,11 +1462,6 @@ export default function Home() {
                             <X className="h-4 w-4" />
                           </button>
                           <div className="pr-10">
-                            <p className="editorial-caption">
-                              {billing.subscriptionStatus === 'free'
-                                ? (locale === 'en' ? 'Membership' : '会员方案')
-                                : 'Snapshot Pro'}
-                            </p>
                             <h3 className="editorial-serif mt-3 text-3xl font-semibold leading-tight">
                               {billing.subscriptionStatus === 'free'
                                 ? ui.promoTitleFree(billing.remaining)
@@ -1449,17 +1475,7 @@ export default function Home() {
                                   : `当前方案：${billing.subscriptionStatus}。本周期还可继续使用 ${billing.remaining} 次识图。`)}
                             </p>
                           </div>
-                          <div className="mt-5 flex items-center justify-between gap-3 rounded-[1.5rem] border border-[var(--editorial-border)] bg-[rgba(255,255,255,0.45)] px-4 py-3">
-                            <div>
-                              <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--editorial-muted)]">
-                                {locale === 'en' ? 'Plan' : '方案'}
-                              </p>
-                              <p className="mt-1 text-sm font-medium text-[var(--editorial-ink)]">
-                                {billing.subscriptionStatus === 'free'
-                                  ? (locale === 'en' ? '3-day trial available' : '可开启 3 天试用')
-                                  : (locale === 'en' ? 'Manage subscription' : '管理当前订阅')}
-                              </p>
-                            </div>
+                          <div className="mt-5 flex items-center justify-end">
                             <button
                               onClick={() => {
                                 playTap();
@@ -1473,20 +1489,6 @@ export default function Home() {
                           </div>
                         </div>
                       )}
-
-                      <div className="editorial-panel p-5 sm:p-6">
-                        <p className="editorial-caption">
-                          {locale === 'en' ? 'Capture companion' : '识图伴随卡'}
-                        </p>
-                        <h3 className="editorial-serif mt-3 text-2xl font-semibold">
-                          {locale === 'en' ? 'Image analysis stays one tap away.' : '上传旁边保留一个轻量会员入口。'}
-                        </h3>
-                        <p className="mt-3 text-sm leading-7 text-[var(--editorial-muted)]">
-                          {locale === 'en'
-                            ? 'When you want more monthly credits, open membership right next to the upload stage instead of hunting through settings.'
-                            : '当你需要更多月额度时，可以直接在上传区旁边打开会员，不需要再去设置里寻找入口。'}
-                        </p>
-                      </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
@@ -2088,8 +2090,7 @@ export default function Home() {
                   <div className="editorial-panel p-5">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="editorial-caption">{ui.membership}</p>
-                        <p className="editorial-serif mt-2 text-2xl font-semibold">{ui.membership}</p>
+                        <p className="editorial-serif text-2xl font-semibold">{ui.membership}</p>
                         <p className="mt-2 text-sm leading-7 text-[var(--editorial-muted)]">
                           {billing.subscriptionStatus === 'free'
                             ? ui.freeStatus(billing.remaining, billing.monthlyLimit)
@@ -2158,9 +2159,9 @@ export default function Home() {
                 playTap();
                 impact(ImpactStyle.Light);
               }}
-              className={`flex flex-col items-center gap-1 rounded-2xl px-6 py-2 transition-all ${activeTab === 'home'
-                ? 'text-[var(--editorial-accent)]'
-                : 'text-[var(--editorial-muted)] hover:text-[var(--editorial-ink)]'
+              className={`flex min-w-[72px] flex-col items-center gap-1 rounded-2xl border px-5 py-2 outline-none transition-all focus:outline-none focus-visible:outline-none ${activeTab === 'home'
+                ? 'border-[var(--editorial-border)] bg-[rgba(215,255,100,0.14)] text-[var(--editorial-accent)] shadow-sm'
+                : 'border-transparent text-[var(--editorial-muted)] hover:text-[var(--editorial-ink)]'
                 }`}
             >
               <HomeIcon className={`h-6 w-6 ${activeTab === 'home' ? 'fill-[var(--editorial-accent)]' : ''}`} />
@@ -2173,9 +2174,9 @@ export default function Home() {
                 playTap();
                 impact(ImpactStyle.Light);
               }}
-              className={`flex flex-col items-center gap-1 rounded-2xl px-6 py-2 transition-all ${activeTab === 'history'
-                ? 'text-[var(--editorial-accent)]'
-                : 'text-[var(--editorial-muted)] hover:text-[var(--editorial-ink)]'
+              className={`flex min-w-[72px] flex-col items-center gap-1 rounded-2xl border px-5 py-2 outline-none transition-all focus:outline-none focus-visible:outline-none ${activeTab === 'history'
+                ? 'border-[var(--editorial-border)] bg-[rgba(215,255,100,0.14)] text-[var(--editorial-accent)] shadow-sm'
+                : 'border-transparent text-[var(--editorial-muted)] hover:text-[var(--editorial-ink)]'
                 }`}
             >
               <BookOpen className={`h-6 w-6 ${activeTab === 'history' ? 'fill-[var(--editorial-accent)]' : ''}`} />
@@ -2188,9 +2189,9 @@ export default function Home() {
                 playTap();
                 impact(ImpactStyle.Light);
               }}
-              className={`flex flex-col items-center gap-1 rounded-2xl px-6 py-2 transition-all ${activeTab === 'stats'
-                ? 'text-[var(--editorial-accent)]'
-                : 'text-[var(--editorial-muted)] hover:text-[var(--editorial-ink)]'
+              className={`flex min-w-[72px] flex-col items-center gap-1 rounded-2xl border px-5 py-2 outline-none transition-all focus:outline-none focus-visible:outline-none ${activeTab === 'stats'
+                ? 'border-[var(--editorial-border)] bg-[rgba(215,255,100,0.14)] text-[var(--editorial-accent)] shadow-sm'
+                : 'border-transparent text-[var(--editorial-muted)] hover:text-[var(--editorial-ink)]'
                 }`}
             >
               <BarChart3 className={`h-6 w-6 ${activeTab === 'stats' ? 'fill-[var(--editorial-accent)]' : ''}`} />
@@ -2203,9 +2204,9 @@ export default function Home() {
                 playTap();
                 impact(ImpactStyle.Light);
               }}
-              className={`flex flex-col items-center gap-1 rounded-2xl px-6 py-2 transition-all ${activeTab === 'profile'
-                ? 'text-[var(--editorial-accent)]'
-                : 'text-[var(--editorial-muted)] hover:text-[var(--editorial-ink)]'
+              className={`flex min-w-[72px] flex-col items-center gap-1 rounded-2xl border px-5 py-2 outline-none transition-all focus:outline-none focus-visible:outline-none ${activeTab === 'profile'
+                ? 'border-[var(--editorial-border)] bg-[rgba(215,255,100,0.14)] text-[var(--editorial-accent)] shadow-sm'
+                : 'border-transparent text-[var(--editorial-muted)] hover:text-[var(--editorial-ink)]'
                 }`}
             >
               <UserIcon className={`h-6 w-6 ${activeTab === 'profile' ? 'fill-[var(--editorial-accent)]' : ''}`} />
