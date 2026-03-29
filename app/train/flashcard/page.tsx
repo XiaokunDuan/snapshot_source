@@ -17,6 +17,7 @@ interface WordCard {
 }
 
 const PRIMARY_LANGUAGE_KEY = 'snapshot_primary_language';
+const HISTORY_CACHE_KEY = 'vocabulary_history';
 
 export default function FlashcardTraining() {
     const router = useRouter();
@@ -61,10 +62,16 @@ export default function FlashcardTraining() {
                 }
 
                 const historyItems = Array.isArray(payload) ? payload as HistoryApiItem[] : [];
-                const nextCards = historyItems
+                const normalizedHistory = historyItems.map(normalizeHistoryItem);
+                const cachedHistory = typeof window !== 'undefined'
+                    ? JSON.parse(window.localStorage.getItem(HISTORY_CACHE_KEY) || '[]')
+                    : [];
+                const fallbackHistory = Array.isArray(cachedHistory) ? cachedHistory : [];
+                const sourceHistory = normalizedHistory.length > 0 ? normalizedHistory : fallbackHistory;
+
+                const nextCards = sourceHistory
                     .map((item) => {
-                        const normalized = normalizeHistoryItem(item);
-                        const variant = normalized.variants[storedLanguage];
+                        const variant = item.variants?.[storedLanguage];
                         const word = variant?.term || '';
                         const meaning = variant?.meaning || '';
 
@@ -73,7 +80,7 @@ export default function FlashcardTraining() {
                         }
 
                         return {
-                            id: String(normalized.id ?? `${storedLanguage}-${word}`),
+                            id: String(item.id ?? `${storedLanguage}-${word}`),
                             language: storedLanguage,
                             word,
                             phonetic: variant.phonetic || '',

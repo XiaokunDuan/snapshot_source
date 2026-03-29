@@ -70,6 +70,28 @@ function readHistoryCache() {
   }
 }
 
+function mergeHistoryItems(remoteItems: HistoryItem[], cachedItems: HistoryItem[]) {
+  const merged = [...remoteItems];
+
+  for (const cachedItem of cachedItems) {
+    const duplicate = merged.find((remoteItem) => {
+      if (cachedItem.id && remoteItem.id) {
+        return cachedItem.id === remoteItem.id;
+      }
+
+      return remoteItem.word === cachedItem.word
+        && remoteItem.imageUrl === cachedItem.imageUrl
+        && Math.abs(remoteItem.timestamp - cachedItem.timestamp) < 60_000;
+    });
+
+    if (!duplicate) {
+      merged.push(cachedItem);
+    }
+  }
+
+  return merged.sort((a, b) => b.timestamp - a.timestamp).slice(0, 50);
+}
+
 function isWordResult(value: unknown): value is WordResult {
   if (!value || typeof value !== 'object') {
     return false;
@@ -264,20 +286,21 @@ export default function Home() {
             setCheckIns([]);
           }
 
+          const cachedHistory = readHistoryCache();
+
           if (historyRes.status === 'fulfilled') {
             if (historyRes.value.ok) {
               const historyData: HistoryApiItem[] = await historyRes.value.json();
               const normalized = historyData.map(normalizeHistoryItem);
-              setHistory(normalized);
-              persistHistoryCache(normalized);
+              const mergedHistory = mergeHistoryItems(normalized, cachedHistory);
+              setHistory(mergedHistory);
+              persistHistoryCache(mergedHistory);
             } else {
               console.error(`Failed to fetch history: ${historyRes.value.status}`);
-              const cachedHistory = readHistoryCache();
               setHistory(cachedHistory);
             }
           } else {
             console.error('Failed to fetch remote history:', historyRes.reason);
-            const cachedHistory = readHistoryCache();
             setHistory(cachedHistory);
           }
         } catch (err) {
@@ -1021,7 +1044,9 @@ export default function Home() {
 
           return normalized;
         })
-        .catch(err => console.error('Failed to save to database:', err));
+        .catch(err => {
+          console.error('Failed to save to database:', err);
+        });
 
       void persistHistoryPromise;
 

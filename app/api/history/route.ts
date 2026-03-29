@@ -5,10 +5,10 @@ import {
     createHistoryRecord,
     deleteHistoryRecord,
     listHistory,
-    resolveHistoryUserId,
     updateHistoryRecord,
 } from '@/lib/history-store';
 import { historyCreateSchema, historyUpdateSchema, parseHistoryId } from '@/lib/history-validation';
+import { ensureDbUserFromClerkId } from '@/lib/users';
 
 export const runtime = 'nodejs';
 
@@ -19,12 +19,9 @@ async function requireHistoryUser() {
         return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
     }
 
-    const dbUserId = await resolveHistoryUserId(userId);
-    if (!dbUserId) {
-        return { error: NextResponse.json({ error: 'User not found' }, { status: 404 }) };
-    }
+    const dbUser = await ensureDbUserFromClerkId(userId);
 
-    return { dbUserId };
+    return { dbUserId: dbUser.id };
 }
 
 // GET - 获取学习历史
@@ -94,11 +91,6 @@ export async function POST(req: NextRequest) {
 // DELETE - 删除单词
 export async function DELETE(req: NextRequest) {
     try {
-        const user = await requireHistoryUser();
-        if (user.error) {
-            return user.error;
-        }
-
         const { searchParams } = new URL(req.url);
         const id = searchParams.get('id');
 
@@ -109,6 +101,11 @@ export async function DELETE(req: NextRequest) {
                 { error: 'A numeric id is required' },
                 { status: 400 }
             );
+        }
+
+        const user = await requireHistoryUser();
+        if (user.error) {
+            return user.error;
         }
 
         await deleteHistoryRecord(user.dbUserId, parsedId);
