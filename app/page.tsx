@@ -643,6 +643,8 @@ export default function Home() {
 
     } catch (analyzeError) {
       console.error('Analysis error:', analyzeError);
+      setCurrentImage(null);
+      setResult(null);
       alert(`分析失败: ${analyzeError instanceof Error ? analyzeError.message : '未知错误'}`);
       setIsAnalyzing(false);
     }

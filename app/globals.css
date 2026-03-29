@@ -28,11 +28,11 @@
 .dark {
   --background: var(--wise-dark-bg);
   --foreground: #ededed;
-  --editorial-paper: #0d1117;
+  --editorial-paper: #0a0f15;
   --editorial-ink: #f5f1e8;
-  --editorial-muted: rgba(245, 241, 232, 0.68);
-  --editorial-border: rgba(245, 241, 232, 0.12);
-  --editorial-panel: rgba(17, 22, 30, 0.82);
+  --editorial-muted: rgba(245, 241, 232, 0.62);
+  --editorial-border: rgba(245, 241, 232, 0.14);
+  --editorial-panel: rgba(18, 24, 33, 0.92);
   --editorial-accent: #b6f36a;
 }
 
@@ -59,6 +59,13 @@ h4,
     linear-gradient(180deg, color-mix(in srgb, var(--editorial-paper) 96%, black 4%), var(--editorial-paper));
 }
 
+.dark .editorial-shell {
+  background:
+    radial-gradient(circle at top left, rgba(182, 243, 106, 0.12), transparent 24%),
+    radial-gradient(circle at bottom right, rgba(76, 105, 138, 0.18), transparent 30%),
+    linear-gradient(180deg, #0b1016, #0a0f15 42%, #111821 100%);
+}
+
 .editorial-grid {
   background-image:
     linear-gradient(to right, color-mix(in srgb, var(--editorial-border) 60%, transparent) 1px, transparent 1px),
@@ -71,6 +78,10 @@ h4,
   border: 1px solid var(--editorial-border);
   backdrop-filter: blur(20px);
   box-shadow: 0 12px 60px rgba(18, 24, 38, 0.08);
+}
+
+.dark .editorial-panel {
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.35);
 }
 
 .editorial-rail {
@@ -92,4 +103,11 @@ h4,
 .editorial-accent-pill {
   background: var(--editorial-accent);
   color: #111;
+}
+
+.dark input,
+.dark textarea,
+.dark button,
+.dark select {
+  color-scheme: dark;
 }
