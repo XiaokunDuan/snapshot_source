@@ -1,5 +1,5 @@
 import { Drawer } from 'vaul';
-import { Camera, Image as ImageIcon, X } from 'lucide-react';
+import { Camera, Image as ImageIcon } from 'lucide-react';
 
 interface UploadDrawerProps {
     children: React.ReactNode;
@@ -16,40 +16,66 @@ export function UploadDrawer({ children, onCamera, onGallery, isNative }: Upload
             </Drawer.Trigger>
             <Drawer.Portal>
                 <Drawer.Overlay className="fixed inset-0 bg-black/40 z-50 backdrop-blur-sm" />
-                <Drawer.Content className="fixed bottom-0 left-0 right-0 max-w-md mx-auto z-50 mt-24 flex flex-col rounded-t-[32px] bg-white dark:bg-wise-card-dark outline-none transition-colors duration-300">
+                <Drawer.Content className="fixed bottom-0 left-0 right-0 z-50 mx-auto mt-24 flex max-w-md flex-col rounded-t-[36px] border border-[var(--editorial-border)] bg-[var(--editorial-paper)] outline-none shadow-[0_-24px_80px_rgba(0,0,0,0.18)]">
                     <Drawer.Title className="sr-only">选择上传方式</Drawer.Title>
-                    <div className="p-4 bg-white dark:bg-wise-card-dark rounded-t-[32px] flex-1">
-                        <div className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-zinc-300 dark:bg-zinc-600 mb-8" />
+                    <div className="flex-1 rounded-t-[36px] bg-[var(--editorial-paper)] p-5">
+                        <div className="mb-8 h-1.5 w-12 flex-shrink-0 rounded-full bg-[rgba(39,36,31,0.18)] mx-auto" />
 
-                        <div className="max-w-md mx-auto px-4 pb-8 space-y-4">
-                            <button onClick={onCamera} className="w-full flex items-center gap-4 p-4 rounded-2xl bg-zinc-50 dark:bg-white/5 hover:bg-zinc-100 dark:hover:bg-white/10 transition-colors">
-                                <div className="w-12 h-12 rounded-full bg-lime-100 dark:bg-lime-900/30 flex items-center justify-center">
-                                    <Camera className="w-6 h-6 text-wise-lime" />
-                                </div>
-                                <div className="text-left">
-                                    <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">拍照</h3>
-                                    <p className="text-sm text-zinc-500 dark:text-zinc-400">使用相机拍摄新照片</p>
-                                </div>
-                            </button>
+                        <div className="mx-auto max-w-md px-1 pb-6">
+                            <div className="mb-6">
+                                <p className="editorial-kicker">Capture entry</p>
+                                <h3 className="editorial-serif mt-4 text-3xl font-semibold tracking-[-0.04em] text-[var(--editorial-ink)]">
+                                    选择图像入口
+                                </h3>
+                                <p className="mt-3 text-sm leading-7 text-[var(--editorial-muted)]">
+                                    用拍照或相册把一个新词带进学习桌面。后续流程会自动压缩、识别并归档。
+                                </p>
+                            </div>
 
-                            <button onClick={onGallery} className="w-full flex items-center gap-4 p-4 rounded-2xl bg-zinc-50 dark:bg-white/5 hover:bg-zinc-100 dark:hover:bg-white/10 transition-colors">
-                                <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-                                    <ImageIcon className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
-                                </div>
-                                <div className="text-left">
-                                    <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">相册</h3>
-                                    <p className="text-sm text-zinc-500 dark:text-zinc-400">{isNative ? '从手机相册选择' : '选择图片文件，常见格式都支持'}</p>
-                                </div>
-                            </button>
+                            <div className="space-y-4">
+                                <button
+                                    onClick={onCamera}
+                                    className="w-full rounded-[28px] border border-[var(--editorial-border)] bg-[var(--editorial-panel)] p-5 text-left transition-all hover:-translate-y-0.5"
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <div className="flex h-14 w-14 items-center justify-center rounded-full border border-[var(--editorial-border)] bg-[rgba(149,199,85,0.14)]">
+                                            <Camera className="h-6 w-6 text-[var(--editorial-accent)]" />
+                                        </div>
+                                        <div>
+                                            <p className="text-xs uppercase tracking-[0.2em] text-[var(--editorial-muted)]">Instant capture</p>
+                                            <h4 className="editorial-serif mt-1 text-2xl font-semibold text-[var(--editorial-ink)]">拍照</h4>
+                                            <p className="mt-1 text-sm text-[var(--editorial-muted)]">使用相机记录当前场景里的单词。</p>
+                                        </div>
+                                    </div>
+                                </button>
 
-                            <p className="px-2 text-xs leading-5 text-zinc-400 dark:text-zinc-500">
-                                网页端会优先处理当前浏览器可读取的图片类型，并在分析前自动压缩。
-                            </p>
+                                <button
+                                    onClick={onGallery}
+                                    className="w-full rounded-[28px] border border-[var(--editorial-border)] bg-[var(--editorial-panel)] p-5 text-left transition-all hover:-translate-y-0.5"
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <div className="flex h-14 w-14 items-center justify-center rounded-full border border-[var(--editorial-border)] bg-[rgba(149,199,85,0.08)]">
+                                            <ImageIcon className="h-6 w-6 text-[var(--editorial-accent)]" />
+                                        </div>
+                                        <div>
+                                            <p className="text-xs uppercase tracking-[0.2em] text-[var(--editorial-muted)]">Archive source</p>
+                                            <h4 className="editorial-serif mt-1 text-2xl font-semibold text-[var(--editorial-ink)]">相册</h4>
+                                            <p className="mt-1 text-sm text-[var(--editorial-muted)]">{isNative ? '从手机相册选择一张图继续识别。' : '选择图片文件，常见格式都支持。'}</p>
+                                        </div>
+                                    </div>
+                                </button>
+                            </div>
+
+                            <div className="mt-5 rounded-[24px] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.78)] px-4 py-3">
+                                <p className="text-xs leading-6 text-[var(--editorial-muted)]">
+                                    网页端会优先处理当前浏览器可读取的图片类型，并在分析前自动压缩。
+                                </p>
+                            </div>
                         </div>
 
-                        <div className="p-4 border-t border-zinc-100 dark:border-white/5 mt-4">
+                        <div className="mt-4 border-t border-[var(--editorial-border)] pt-4">
                             <Drawer.Close asChild>
-                                <button className="w-full py-3 text-center font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors">取消</button>
+                                <button className="w-full py-3 text-center font-medium text-[var(--editorial-muted)] transition-colors hover:text-[var(--editorial-ink)]">取消</button>
                             </Drawer.Close>
                         </div>
                     </div>

@@ -17,6 +17,7 @@ import ChallengeCard from './components/ChallengeCard';
 import CalendarView from './components/CalendarView';
 import { UploadDrawer } from './components/UploadDrawer';
 import { BillingDrawer } from './components/BillingDrawer';
+import { InstallAppPrompt } from './components/InstallAppPrompt';
 import { trackClientEvent } from '@/lib/analytics-client';
 import { LocaleToggle, useMessages } from '@/app/components/LocaleProvider';
 
@@ -320,91 +321,91 @@ export default function Home() {
 
   if (!isSignedIn) {
     return (
-      <div className="min-h-screen bg-[#f6f1e8] text-gray-900">
-        <main className="mx-auto flex min-h-screen max-w-6xl flex-col justify-between px-6 py-10">
-          <div className="flex items-center justify-between">
+      <div className="editorial-shell min-h-screen text-[var(--editorial-ink)]">
+        <main className="mx-auto flex min-h-screen max-w-6xl flex-col justify-between px-5 py-6 sm:px-6 sm:py-10">
+          <div className="flex items-center justify-between border-b border-[var(--editorial-border)] pb-5">
             <img src="/logo-compact.png" alt="Snapshot Logo" className="h-10 w-auto" />
             <div className="flex items-center gap-3">
               <LocaleToggle />
               <button
                 onClick={() => router.push('/sign-in')}
-                className="rounded-full border border-black/10 bg-white px-5 py-2 text-sm font-semibold"
+                className="rounded-full border border-[var(--editorial-border)] bg-[var(--editorial-panel)] px-5 py-2 text-sm font-semibold"
               >
                 {copy.actions.signIn}
               </button>
             </div>
           </div>
 
-          <section className="grid gap-10 py-10 md:grid-cols-[1.1fr_0.9fr] md:items-center">
+          <section className="editorial-grid gap-8 py-10 md:items-start">
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm text-gray-600 shadow-sm">
-                <Sparkles className="h-4 w-4 text-lime-600" />
+              <div className="editorial-kicker">
+                <Sparkles className="h-4 w-4 text-[var(--editorial-accent)]" />
                 {copy.landing.badge}
               </div>
-              <h1 className="mt-6 text-5xl font-bold leading-tight md:text-6xl">
+              <h1 className="editorial-serif mt-6 max-w-3xl text-5xl font-semibold leading-[0.94] tracking-[-0.04em] md:text-7xl">
                 {copy.landing.title}
               </h1>
-              <p className="mt-6 max-w-xl text-lg text-gray-600">
+              <p className="mt-6 max-w-xl text-lg leading-8 text-[var(--editorial-muted)]">
                 {copy.landing.description}
               </p>
               <div className="mt-8 flex flex-wrap gap-4">
                 <button
                   onClick={() => router.push('/sign-up')}
-                  className="rounded-full bg-gray-900 px-7 py-4 text-sm font-semibold text-white"
+                  className="rounded-full bg-[var(--editorial-ink)] px-7 py-4 text-sm font-semibold text-[var(--editorial-paper)]"
                 >
                   {copy.actions.startFreeTrial}
                 </button>
                 <button
                   onClick={() => router.push('/sign-in')}
-                  className="rounded-full border border-black/10 bg-white px-7 py-4 text-sm font-semibold"
+                  className="rounded-full border border-[var(--editorial-border)] bg-[var(--editorial-panel)] px-7 py-4 text-sm font-semibold"
                 >
                   {copy.actions.signIn}
                 </button>
               </div>
-              <div className="mt-8 grid gap-3 sm:grid-cols-3">
-                <div className="rounded-3xl bg-white p-5 shadow-sm">
-                  <div className="text-sm text-gray-500">{copy.landing.monthlyPrice}</div>
-                  <div className="mt-2 text-2xl font-bold">$9.90</div>
+              <div className="mt-10 grid gap-3 sm:grid-cols-3">
+                <div className="editorial-panel">
+                  <div className="editorial-caption">{copy.landing.monthlyPrice}</div>
+                  <div className="mt-3 text-3xl font-semibold">$9.90</div>
                 </div>
-                <div className="rounded-3xl bg-white p-5 shadow-sm">
-                  <div className="text-sm text-gray-500">{copy.landing.trialLabel}</div>
-                  <div className="mt-2 text-2xl font-bold">{copy.landing.trialLength}</div>
+                <div className="editorial-panel">
+                  <div className="editorial-caption">{copy.landing.trialLabel}</div>
+                  <div className="mt-3 text-3xl font-semibold">{copy.landing.trialLength}</div>
                 </div>
-                <div className="rounded-3xl bg-white p-5 shadow-sm">
-                  <div className="text-sm text-gray-500">{copy.landing.quotaLabel}</div>
-                  <div className="mt-2 text-2xl font-bold">{copy.landing.quotaValue}</div>
+                <div className="editorial-panel">
+                  <div className="editorial-caption">{copy.landing.quotaLabel}</div>
+                  <div className="mt-3 text-3xl font-semibold">{copy.landing.quotaValue}</div>
                 </div>
               </div>
             </div>
 
-            <div className="rounded-[2rem] bg-white p-6 shadow-xl">
-              <div className="rounded-[1.75rem] bg-[#faf6f0] p-6">
+            <div className="editorial-panel p-6 sm:p-8">
+              <div className="rounded-[1.75rem] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.86)] p-6">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-2xl font-bold">{copy.landing.proTitle}</h2>
-                  <span className="rounded-full bg-black px-3 py-1 text-xs font-semibold text-white">{copy.landing.freeTrialBadge}</span>
+                  <h2 className="editorial-serif text-3xl font-semibold">Learning flow</h2>
+                  <span className="editorial-accent-pill">mobile first</span>
                 </div>
-                <div className="mt-6 space-y-3 rounded-3xl bg-white p-4">
-                  <div className="flex items-center justify-between text-sm text-gray-500">
-                    <span>{copy.landing.subtotal}</span>
-                    <span>$9.90 / 月</span>
+                <div className="mt-8 space-y-3 rounded-[1.75rem] border border-[var(--editorial-border)] bg-[var(--editorial-panel)] p-5">
+                  <div className="flex items-center justify-between text-sm text-[var(--editorial-muted)]">
+                    <span>1. Capture</span>
+                    <span>拍照 / 上传</span>
                   </div>
-                  <div className="flex items-center justify-between text-sm text-gray-500">
-                    <span>{copy.landing.trialCharge}</span>
-                    <span>$9.90</span>
+                  <div className="flex items-center justify-between text-sm text-[var(--editorial-muted)]">
+                    <span>2. Extract</span>
+                    <span>单词 / 音标 / 释义</span>
                   </div>
-                  <div className="border-t border-black/5 pt-3 text-base font-semibold flex items-center justify-between">
-                    <span>{copy.landing.todayDue}</span>
-                    <span>$0.00</span>
+                  <div className="flex items-center justify-between border-t border-[var(--editorial-border)] pt-4 text-base font-semibold">
+                    <span>3. Archive</span>
+                    <span>历史 / 复习</span>
                   </div>
                 </div>
-                <div className="mt-6 space-y-3 text-sm text-gray-600">
+                <div className="mt-6 space-y-3 text-sm text-[var(--editorial-muted)]">
                   <div className="flex items-center gap-3">
-                    <ShieldCheck className="h-4 w-4 text-lime-600" />
-                    {copy.landing.resetFeature}
+                    <ShieldCheck className="h-4 w-4 text-[var(--editorial-accent)]" />
+                    先体验识图，再在应用内决定是否升级订阅
                   </div>
                   <div className="flex items-center gap-3">
-                    <ShieldCheck className="h-4 w-4 text-lime-600" />
-                    {copy.landing.monitoringFeature}
+                    <ShieldCheck className="h-4 w-4 text-[var(--editorial-accent)]" />
+                    手机版支持安装到主屏幕，像 App 一样打开
                   </div>
                 </div>
               </div>
@@ -514,6 +515,10 @@ export default function Home() {
       if (!analyzeRes.ok) {
         const errorData = await analyzeRes.json();
         console.error('Analysis error:', JSON.stringify(errorData, null, 2));
+        if (analyzeRes.status === 402) {
+          setShowBillingDrawer(true);
+          void trackClientEvent('billing_drawer_opened', { location: 'analyze_blocked' });
+        }
         throw new Error(errorData.error || 'Analysis failed');
       }
 
@@ -691,9 +696,17 @@ export default function Home() {
       return h.timestamp >= weekAgo;
     }).length
   };
+  const currentLocale = typeof navigator !== 'undefined' && navigator.language.toLowerCase().startsWith('en')
+    ? 'en-US'
+    : 'zh-CN';
+  const mastheadDate = new Date().toLocaleDateString(currentLocale, {
+    month: 'long',
+    day: 'numeric',
+    weekday: 'long'
+  });
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-wise-dark-bg pb-20 transition-colors duration-300">
+    <div className="editorial-shell min-h-screen pb-28 text-[var(--editorial-ink)] transition-colors duration-300">
       <style jsx global>{`
         @keyframes breathe {
           0%, 100% { opacity: 1; transform: scale(1); }
@@ -714,31 +727,54 @@ export default function Home() {
         }
       `}</style>
 
-      <main className="max-w-6xl mx-auto px-4 py-6">
+      <main className="mx-auto max-w-6xl px-4 py-5 sm:px-6 sm:py-8">
         <AnimatePresence mode="wait">
           {/* Home Tab */}
           {activeTab === 'home' && (
             <PageTransition key="home" className="space-y-6">
-              {/* Header Card */}
-              <div className="bg-white dark:bg-wise-card-dark rounded-3xl p-6 shadow-sm transition-colors duration-300">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-3">
-                    <img
-                      src="/logo-compact.png"
-                      alt="Snapshot Logo"
-                      className="h-10 w-auto"
-                    />
+              <div className="editorial-panel overflow-hidden p-6 sm:p-8">
+                <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="max-w-2xl">
+                    <div className="editorial-kicker">Snapshot studio</div>
+                    <h1 className="editorial-serif mt-4 text-4xl font-semibold leading-[0.94] tracking-[-0.04em] sm:text-6xl">
+                      Learn from what
+                      <br />
+                      the camera notices.
+                    </h1>
+                    <p className="mt-4 max-w-xl text-sm leading-7 text-[var(--editorial-muted)] sm:text-base">
+                      拍一张图，抓住一个词，再把它变成可以复习的语言样本。首页现在只做一件事:
+                      更快进入识别与记忆。
+                    </p>
+                    <div className="mt-6 flex flex-wrap gap-3">
+                      <span className="editorial-accent-pill">{mastheadDate}</span>
+                      <span className="rounded-full border border-[var(--editorial-border)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-[var(--editorial-muted)]">
+                        {stats.today} today
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-right">
-                      <div className="text-3xl font-bold text-wise-lime">{stats.today}</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">今日学习</div>
+                  <div className="flex items-start gap-4 lg:flex-col lg:items-end">
+                    <div className="editorial-rail min-w-[190px]">
+                      <p className="editorial-caption">Daily cadence</p>
+                      <div className="mt-3 grid grid-cols-3 gap-3">
+                        <div>
+                          <div className="text-3xl font-semibold">{stats.today}</div>
+                          <div className="editorial-caption mt-1">Today</div>
+                        </div>
+                        <div>
+                          <div className="text-3xl font-semibold">{stats.thisWeek}</div>
+                          <div className="editorial-caption mt-1">Week</div>
+                        </div>
+                        <div>
+                          <div className="text-3xl font-semibold">{stats.total}</div>
+                          <div className="editorial-caption mt-1">Archive</div>
+                        </div>
+                      </div>
                     </div>
                     {isLoaded && isSignedIn && (
                       <UserButton
                         appearance={{
                           elements: {
-                            avatarBox: "w-12 h-12 rounded-full ring-2 ring-wise-lime ring-offset-2 dark:ring-offset-wise-card-dark"
+                            avatarBox: "w-12 h-12 rounded-full ring-2 ring-[var(--editorial-accent)] ring-offset-2 ring-offset-[var(--editorial-paper)]"
                           }
                         }}
                       />
@@ -771,14 +807,17 @@ export default function Home() {
                   {isNative && (
                     <button
                       onClick={takePicture}
-                      className="w-full bg-wise-lime hover:bg-lime-400 text-black rounded-3xl p-8 text-center cursor-pointer transition-all duration-300 shadow-lg hover:shadow-xl"
+                      className="editorial-panel w-full p-8 text-left transition-all duration-300 hover:-translate-y-0.5"
                     >
-                      <div className="flex flex-col items-center gap-4">
-                        <div className="p-4 rounded-full bg-black/10">
-                          <CameraIcon className="w-12 h-12 text-black" />
+                      <div className="flex items-center justify-between gap-6">
+                        <div>
+                          <p className="editorial-caption">Native capture</p>
+                          <h2 className="editorial-serif mt-3 text-3xl font-semibold">拍照识别</h2>
+                          <p className="mt-3 max-w-md text-sm leading-7 text-[var(--editorial-muted)]">直接使用相机，把当前场景里的英文词汇切成可学的卡片。</p>
                         </div>
-                        <h2 className="text-2xl font-bold text-black">拍照识别</h2>
-                        <p className="text-black/70">使用相机学习新单词</p>
+                        <div className="rounded-full border border-[var(--editorial-border)] bg-[rgba(149,199,85,0.15)] p-5">
+                          <CameraIcon className="h-12 w-12 text-[var(--editorial-accent)]" />
+                        </div>
                       </div>
                     </button>
                   )}
@@ -800,11 +839,11 @@ export default function Home() {
                       onDragLeave={isNative ? undefined : handleDragLeave}
                       onDrop={isNative ? undefined : handleDrop}
                       className={`
-                    relative border-2 border-dashed rounded-3xl p-12 text-center cursor-pointer
-                    transition-all duration-300 ease-in-out bg-white
+                    editorial-panel relative overflow-hidden border p-8 text-left
+                    transition-all duration-300 ease-in-out
                     ${isDragging
-                          ? 'border-lime-500 bg-lime-50/50 scale-[1.02]'
-                          : 'border-gray-200 hover:bg-lime-50/30 hover:border-lime-400'
+                          ? 'border-[var(--editorial-accent)] bg-[rgba(149,199,85,0.12)] scale-[1.01]'
+                          : 'border-[var(--editorial-border)] hover:-translate-y-0.5'
                         }
                   `}
                     >
@@ -818,60 +857,68 @@ export default function Home() {
                         />
                       )}
 
-                      <div className="flex flex-col items-center gap-4">
-                        <img
-                          src="/learning.png"
-                          alt="Learning"
-                          className="w-32 h-32 opacity-90 image-soften"
-                        />
+                      <div className="grid gap-8 md:grid-cols-[0.9fr_1.1fr] md:items-center">
+                        <div className="relative">
+                          <div className="absolute inset-0 rounded-[2rem] bg-[radial-gradient(circle_at_center,rgba(149,199,85,0.18),transparent_70%)]" />
+                          <img
+                            src="/learning.png"
+                            alt="Learning"
+                            className="relative h-44 w-44 opacity-90 image-soften"
+                          />
+                        </div>
                         <div>
-                          <h2 className="text-xl font-bold text-gray-900 mb-2">
-                            {isNative ? '从相册选择' : (isDragging ? '松开上传' : '上传图片')}
+                          <p className="editorial-caption">Capture a fresh word</p>
+                          <h2 className="editorial-serif mt-3 text-4xl font-semibold leading-tight">
+                            {isNative ? '从相册挑一张图' : (isDragging ? '松开，开始识别' : 'Drop an image into the learning desk')}
                           </h2>
-                          <p className="text-gray-600 text-sm">
-                            {isNative ? '选择图片开始识别' : '支持常见图片格式，上传后会自动压缩后再识别'}
+                          <p className="mt-4 text-sm leading-7 text-[var(--editorial-muted)]">
+                            {isNative ? '选一张图，系统会提炼图里的核心英文词汇并生成例句。' : '支持常见图片格式。上传后会自动压缩，再进入 Gemini 分析与历史归档流程。'}
                           </p>
-                          <p className="text-gray-400 text-xs mt-1">
-                            {isNative ? '以系统相册可选格式为准' : '例如 PNG、JPG、JPEG、WEBP、GIF，以及当前浏览器可读取的 HEIC/HEIF'}
-                          </p>
+                          <div className="mt-5 flex flex-wrap gap-3 text-xs uppercase tracking-[0.22em] text-[var(--editorial-muted)]">
+                            <span className="rounded-full border border-[var(--editorial-border)] px-3 py-2">AI extraction</span>
+                            <span className="rounded-full border border-[var(--editorial-border)] px-3 py-2">Archive ready</span>
+                            <span className="rounded-full border border-[var(--editorial-border)] px-3 py-2">
+                              {isNative ? 'gallery' : 'png jpg webp heic'}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>
                   </UploadDrawer>
 
-                  {/* Info Cards */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-white dark:bg-wise-card-dark rounded-3xl p-6 shadow-sm transition-colors duration-300">
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="p-2 bg-lime-100 dark:bg-lime-900/30 rounded-xl">
-                          <TrendingUp className="w-5 h-5 text-wise-lime" />
+                  <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="editorial-panel">
+                        <div className="mb-4 flex items-center gap-3">
+                          <div className="rounded-2xl border border-[var(--editorial-border)] bg-[rgba(149,199,85,0.12)] p-2">
+                            <TrendingUp className="h-5 w-5 text-[var(--editorial-accent)]" />
+                          </div>
+                          <span className="editorial-caption">This week</span>
                         </div>
-                        <span className="text-sm font-medium text-gray-600 dark:text-gray-400">本周学习</span>
+                        <div className="text-4xl font-semibold">{stats.thisWeek}</div>
+                        <div className="mt-1 text-sm text-[var(--editorial-muted)]">新词进入本周档案</div>
                       </div>
-                      <div className="text-2xl font-bold text-gray-900 dark:text-white">{stats.thisWeek}</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">个单词</div>
-                    </div>
-                    <div className="bg-white dark:bg-wise-card-dark rounded-3xl p-6 shadow-sm transition-colors duration-300">
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl">
-                          <Award className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                      <div className="editorial-panel">
+                        <div className="mb-4 flex items-center gap-3">
+                          <div className="rounded-2xl border border-[var(--editorial-border)] bg-[rgba(149,199,85,0.12)] p-2">
+                            <Award className="h-5 w-5 text-[var(--editorial-accent)]" />
+                          </div>
+                          <span className="editorial-caption">All time</span>
                         </div>
-                        <span className="text-sm font-medium text-gray-600 dark:text-gray-400">累计学习</span>
+                        <div className="text-4xl font-semibold">{stats.total}</div>
+                        <div className="mt-1 text-sm text-[var(--editorial-muted)]">累计识别并保存的词条</div>
                       </div>
-                      <div className="text-2xl font-bold text-gray-900 dark:text-white">{stats.total}</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">个单词</div>
                     </div>
-                  </div>
 
-                  {billing && (
-                    <div className="rounded-3xl bg-[#1d1a15] p-6 text-white shadow-sm">
+                    {billing && (
+                      <div className="rounded-[2rem] bg-[#1c1914] p-6 text-white shadow-sm">
                       <div className="flex items-start justify-between gap-4">
                         <div>
                           <p className="text-xs uppercase tracking-[0.2em] text-white/60">Snapshot Pro</p>
-                          <h3 className="mt-2 text-2xl font-bold">
+                          <h3 className="editorial-serif mt-3 text-3xl font-semibold leading-tight">
                             {billing.subscriptionStatus === 'inactive' ? '开始 3 天免费试用' : `剩余 ${billing.remaining} 次识别`}
                           </h3>
-                          <p className="mt-2 text-sm text-white/70">
+                          <p className="mt-3 text-sm leading-7 text-white/70">
                             {billing.subscriptionStatus === 'inactive'
                               ? '试用结束后 $9.90/月，每月 100 次 AI 图片分析额度。'
                               : `当前状态：${billing.subscriptionStatus}，本周期已用 ${billing.usageCount}/${billing.monthlyLimit}`}
@@ -887,24 +934,25 @@ export default function Home() {
                           {billing.subscriptionStatus === 'inactive' ? '开始试用' : '查看订阅'}
                         </button>
                       </div>
-                    </div>
-                  )}
+                      </div>
+                    )}
+                  </div>
                 </>
               )}
 
               {/* Loading */}
               {(isUploading || isAnalyzing) && (
-                <div className="bg-white dark:bg-wise-card-dark rounded-3xl p-12 text-center shadow-sm">
+                <div className="editorial-panel p-12 text-center shadow-sm">
                   <div className="flex flex-col items-center gap-6">
                     <div className="relative">
-                      <Loader2 className="w-16 h-16 text-wise-lime animate-spin" />
-                      <div className="absolute inset-0 bg-wise-lime rounded-full blur-xl opacity-20 animate-pulse" />
+                      <Loader2 className="h-16 w-16 animate-spin text-[var(--editorial-accent)]" />
+                      <div className="absolute inset-0 rounded-full bg-[var(--editorial-accent)] opacity-20 blur-xl animate-pulse" />
                     </div>
                     <div>
-                      <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                      <h3 className="editorial-serif mb-2 text-2xl font-semibold">
                         {isUploading ? '加载中...' : 'AI 识别中...'}
                       </h3>
-                      <p className="text-gray-600 dark:text-gray-400 text-sm">
+                      <p className="text-sm text-[var(--editorial-muted)]">
                         {isUploading ? '请稍候' : '正在分析图片内容'}
                       </p>
                     </div>
@@ -914,39 +962,40 @@ export default function Home() {
 
               {/* Result */}
               {result && currentImage && !isUploading && !isAnalyzing && (
-                <div className="space-y-4">
-                  <div className="bg-white rounded-3xl overflow-hidden shadow-sm">
+                <div className="grid gap-4 lg:grid-cols-[0.92fr_1.08fr]">
+                  <div className="editorial-panel overflow-hidden p-3">
                     <img
                       src={currentImage}
                       alt="Uploaded"
-                      className="w-full h-64 object-cover"
+                      className="h-full max-h-[520px] w-full rounded-[1.75rem] object-cover"
                     />
                   </div>
 
-                  <div className="bg-gradient-to-br from-lime-50 to-emerald-50 rounded-3xl p-8 shadow-sm">
-                    <div className="text-center space-y-5">
+                  <div className="editorial-panel p-8">
+                    <div className="space-y-6">
                       <div>
-                        <h2 className="text-5xl font-bold text-gray-900 mb-2">
+                        <p className="editorial-caption">Fresh extraction</p>
+                        <h2 className="editorial-serif mb-3 mt-3 text-5xl font-semibold tracking-[-0.04em] sm:text-6xl">
                           {result.word}
                         </h2>
-                        <p className="text-xl text-lime-600 font-mono">
+                        <p className="font-mono text-xl text-[var(--editorial-accent)]">
                           {result.phonetic}
                         </p>
                       </div>
 
-                      <div className="inline-block px-6 py-3 bg-lime-500 rounded-full">
+                      <div className="inline-block rounded-full bg-[var(--editorial-accent)] px-6 py-3">
                         <p className="text-lg font-medium text-white">
                           {result.meaning}
                         </p>
                       </div>
 
-                      <div className="w-16 h-1 bg-lime-400 rounded-full mx-auto" />
+                      <div className="h-px w-full bg-[var(--editorial-border)]" />
 
-                      <div className="bg-white rounded-2xl p-6">
-                        <p className="text-base text-gray-900 italic mb-2">
+                      <div className="rounded-[1.75rem] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.72)] p-6">
+                        <p className="text-base italic text-[var(--editorial-ink)]">
                           &quot;{result.sentence}&quot;
                         </p>
-                        <p className="text-sm text-gray-600">
+                        <p className="mt-3 text-sm leading-7 text-[var(--editorial-muted)]">
                           {result.sentence_cn}
                         </p>
                       </div>
@@ -955,7 +1004,7 @@ export default function Home() {
                           setCurrentImage(null);
                           setResult(null);
                         }}
-                        className="w-full px-6 py-4 bg-gray-900 hover:bg-gray-800 text-white rounded-full font-semibold transition-all shadow-md hover:shadow-lg"
+                        className="w-full rounded-full bg-[var(--editorial-ink)] px-6 py-4 font-semibold text-[var(--editorial-paper)] transition-all hover:opacity-92"
                       >
                         继续学习
                       </button>
@@ -969,62 +1018,63 @@ export default function Home() {
           {/* Edit Modal */}
           {activeTab === 'history' && editingItem && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-              <div className="bg-white dark:bg-wise-card-dark rounded-3xl p-6 w-full max-w-md shadow-xl transition-colors duration-300">
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">编辑单词</h3>
+              <div className="w-full max-w-md rounded-[2rem] border border-[var(--editorial-border)] bg-[var(--editorial-paper)] p-6 shadow-xl">
+                <p className="editorial-kicker">Archive edit</p>
+                <h3 className="editorial-serif mb-5 mt-3 text-3xl font-semibold tracking-[-0.04em]">编辑单词</h3>
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">单词</label>
+                    <label className="mb-2 block text-xs font-medium uppercase tracking-[0.18em] text-[var(--editorial-muted)]">单词</label>
                     <input
                       value={editingItem.word}
                       onChange={e => setEditingItem({ ...editingItem, word: e.target.value })}
-                      className="w-full p-3 rounded-xl bg-gray-50 dark:bg-black/20 text-gray-900 dark:text-white border-0 focus:ring-2 focus:ring-wise-lime transition-all"
+                      className="w-full rounded-2xl border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.7)] p-3 text-[var(--editorial-ink)] outline-none transition-all focus:border-[var(--editorial-accent)]"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">音标</label>
+                    <label className="mb-2 block text-xs font-medium uppercase tracking-[0.18em] text-[var(--editorial-muted)]">音标</label>
                     <input
                       value={editingItem.phonetic}
                       onChange={e => setEditingItem({ ...editingItem, phonetic: e.target.value })}
-                      className="w-full p-3 rounded-xl bg-gray-50 dark:bg-black/20 text-gray-900 dark:text-white border-0 focus:ring-2 focus:ring-wise-lime transition-all"
+                      className="w-full rounded-2xl border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.7)] p-3 text-[var(--editorial-ink)] outline-none transition-all focus:border-[var(--editorial-accent)]"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">释义</label>
+                    <label className="mb-2 block text-xs font-medium uppercase tracking-[0.18em] text-[var(--editorial-muted)]">释义</label>
                     <input
                       value={editingItem.meaning}
                       onChange={e => setEditingItem({ ...editingItem, meaning: e.target.value })}
-                      className="w-full p-3 rounded-xl bg-gray-50 dark:bg-black/20 text-gray-900 dark:text-white border-0 focus:ring-2 focus:ring-wise-lime transition-all"
+                      className="w-full rounded-2xl border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.7)] p-3 text-[var(--editorial-ink)] outline-none transition-all focus:border-[var(--editorial-accent)]"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">例句</label>
+                    <label className="mb-2 block text-xs font-medium uppercase tracking-[0.18em] text-[var(--editorial-muted)]">例句</label>
                     <textarea
                       value={editingItem.sentence}
                       onChange={e => setEditingItem({ ...editingItem, sentence: e.target.value })}
                       rows={2}
-                      className="w-full p-3 rounded-xl bg-gray-50 dark:bg-black/20 text-gray-900 dark:text-white border-0 focus:ring-2 focus:ring-wise-lime transition-all resize-none"
+                      className="w-full resize-none rounded-2xl border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.7)] p-3 text-[var(--editorial-ink)] outline-none transition-all focus:border-[var(--editorial-accent)]"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">例句翻译</label>
+                    <label className="mb-2 block text-xs font-medium uppercase tracking-[0.18em] text-[var(--editorial-muted)]">例句翻译</label>
                     <textarea
                       value={editingItem.sentence_cn}
                       onChange={e => setEditingItem({ ...editingItem, sentence_cn: e.target.value })}
                       rows={2}
-                      className="w-full p-3 rounded-xl bg-gray-50 dark:bg-black/20 text-gray-900 dark:text-white border-0 focus:ring-2 focus:ring-wise-lime transition-all resize-none"
+                      className="w-full resize-none rounded-2xl border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.7)] p-3 text-[var(--editorial-ink)] outline-none transition-all focus:border-[var(--editorial-accent)]"
                     />
                   </div>
                 </div>
-                <div className="flex gap-3 mt-6">
+                <div className="mt-6 flex gap-3">
                   <button
                     onClick={() => setEditingItem(null)}
-                    className="flex-1 py-3 px-4 bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-300 rounded-xl font-medium"
+                    className="flex-1 rounded-2xl border border-[var(--editorial-border)] bg-[var(--editorial-panel)] px-4 py-3 font-medium text-[var(--editorial-muted)]"
                   >
                     取消
                   </button>
                   <button
                     onClick={() => saveEdit(editingItem)}
-                    className="flex-1 py-3 px-4 bg-wise-lime text-black rounded-xl font-bold"
+                    className="flex-1 rounded-2xl bg-[var(--editorial-accent)] px-4 py-3 font-bold text-black"
                   >
                     保存
                   </button>
@@ -1036,13 +1086,14 @@ export default function Home() {
           {/* Delete Confirmation Modal */}
           {activeTab === 'history' && itemToDelete && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setItemToDelete(null)}>
-              <div className="bg-white dark:bg-wise-card-dark rounded-3xl p-6 w-full max-w-sm shadow-xl transition-colors duration-300" onClick={e => e.stopPropagation()}>
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">确认删除</h3>
-                <p className="text-gray-500 dark:text-gray-400 mb-6">确定要删除单词 &quot;{itemToDelete.word}&quot; 吗？此操作无法撤销。</p>
+              <div className="w-full max-w-sm rounded-[2rem] border border-[var(--editorial-border)] bg-[var(--editorial-paper)] p-6 shadow-xl" onClick={e => e.stopPropagation()}>
+                <p className="editorial-kicker">Danger zone</p>
+                <h3 className="editorial-serif mb-3 mt-3 text-3xl font-semibold tracking-[-0.04em]">确认删除</h3>
+                <p className="mb-6 text-sm leading-7 text-[var(--editorial-muted)]">确定要删除单词 &quot;{itemToDelete.word}&quot; 吗？此操作无法撤销。</p>
                 <div className="flex gap-3">
                   <button
                     onClick={() => setItemToDelete(null)}
-                    className="flex-1 py-3 px-4 bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-300 rounded-xl font-medium"
+                    className="flex-1 rounded-2xl border border-[var(--editorial-border)] bg-[var(--editorial-panel)] px-4 py-3 font-medium text-[var(--editorial-muted)]"
                   >
                     取消
                   </button>
@@ -1051,7 +1102,7 @@ export default function Home() {
                       deleteWord(itemToDelete);
                       setItemToDelete(null);
                     }}
-                    className="flex-1 py-3 px-4 bg-red-500 text-white rounded-xl font-bold hover:bg-red-600 transition-colors"
+                    className="flex-1 rounded-2xl bg-red-500 px-4 py-3 font-bold text-white transition-colors hover:bg-red-600"
                   >
                     删除
                   </button>
@@ -1063,17 +1114,18 @@ export default function Home() {
           {/* History Tab */}
           {activeTab === 'history' && (
             <PageTransition key="history" className="space-y-6">
-              <div className="bg-white dark:bg-wise-card-dark rounded-3xl p-6 shadow-sm transition-colors duration-300">
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">学习记录</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400">{history.length} 个单词</p>
+              <div className="editorial-panel p-6 sm:p-8">
+                <p className="editorial-kicker">Archive</p>
+                <h2 className="editorial-serif mt-4 text-4xl font-semibold tracking-[-0.04em] sm:text-5xl">学习记录</h2>
+                <p className="mt-3 text-sm text-[var(--editorial-muted)]">{history.length} 个单词，按图像与日期归档。</p>
               </div>
 
               {history.length > 0 ? (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-4 md:grid-cols-2">
                   {history.map((item) => (
                     <div
                       key={item.id || item.timestamp}
-                      className="group relative bg-white dark:bg-wise-card-dark rounded-3xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300"
+                      className="editorial-panel group relative overflow-hidden p-3 transition-all duration-300 hover:-translate-y-0.5"
                     >
                       <img
                         src={item.imageUrl}
@@ -1083,7 +1135,7 @@ export default function Home() {
                           setCurrentImage(item.imageUrl);
                           setResult(item);
                         }}
-                        className="w-full h-32 object-cover cursor-pointer"
+                        className="h-40 w-full cursor-pointer rounded-[1.5rem] object-cover"
                       />
                       <div className="p-4">
                         <div className="flex justify-between items-start mb-2">
@@ -1093,7 +1145,7 @@ export default function Home() {
                               setCurrentImage(item.imageUrl);
                               setResult(item);
                             }}
-                            className="font-bold text-gray-900 dark:text-white text-lg cursor-pointer truncate mr-2"
+                            className="editorial-serif mr-2 cursor-pointer truncate text-2xl font-semibold"
                           >
                             {item.word}
                           </p>
@@ -1103,7 +1155,7 @@ export default function Home() {
                                 e.stopPropagation();
                                 setEditingItem(item);
                               }}
-                              className="w-8 h-8 flex items-center justify-center rounded-full bg-wise-lime text-black shadow-sm hover:scale-105 transition-transform"
+                              className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--editorial-accent)] text-black shadow-sm transition-transform hover:scale-105"
                             >
                               <Edit2 className="w-4 h-4" />
                             </button>
@@ -1112,14 +1164,14 @@ export default function Home() {
                                 e.stopPropagation();
                                 setItemToDelete(item);
                               }}
-                              className="w-8 h-8 flex items-center justify-center rounded-full bg-white dark:bg-gray-700 text-red-500 shadow-sm border border-gray-100 dark:border-gray-600 hover:scale-105 transition-transform"
+                              className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--editorial-border)] bg-[var(--editorial-panel)] text-red-500 shadow-sm transition-transform hover:scale-105"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
                         </div>
-                        <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-1">{item.meaning}</p>
-                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
+                        <p className="line-clamp-1 text-sm text-[var(--editorial-muted)]">{item.meaning}</p>
+                        <p className="mt-3 text-xs uppercase tracking-[0.2em] text-[var(--editorial-muted)]">
                           {new Date(item.timestamp).toLocaleDateString('zh-CN')}
                         </p>
                       </div>
@@ -1127,14 +1179,14 @@ export default function Home() {
                   ))}
                 </div>
               ) : (
-                <div className="bg-white dark:bg-wise-card-dark rounded-3xl p-12 text-center transition-colors duration-300">
+                <div className="editorial-panel p-12 text-center transition-colors duration-300">
                   <img
                     src="/empty-state.png"
                     alt="Empty State"
                     className="w-48 h-48 mx-auto mb-6 opacity-80 image-soften"
                   />
-                  <p className="text-gray-500 dark:text-gray-400">还没有学习记录</p>
-                  <p className="text-gray-400 dark:text-gray-500 text-sm mt-2">拍照识别开始学习吧</p>
+                  <p className="text-[var(--editorial-muted)]">还没有学习记录</p>
+                  <p className="mt-2 text-sm text-[var(--editorial-muted)]">从首页上传一张图，先建立第一条档案。</p>
                 </div>
               )}
             </PageTransition>
@@ -1143,51 +1195,53 @@ export default function Home() {
           {/* Stats Tab */}
           {activeTab === 'stats' && (
             <PageTransition key="stats" className="space-y-6">
-              <div className="bg-white dark:bg-wise-card-dark rounded-3xl p-6 shadow-sm transition-colors duration-300">
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">学习统计</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400">你的进步一目了然</p>
+              <div className="editorial-panel p-6 sm:p-8">
+                <p className="editorial-kicker">Metrics</p>
+                <h2 className="editorial-serif mt-4 text-4xl font-semibold tracking-[-0.04em] sm:text-5xl">学习统计</h2>
+                <p className="mt-3 text-sm text-[var(--editorial-muted)]">用更接近编辑年鉴的方式看你的学习密度。</p>
               </div>
 
               <div className="space-y-4">
-                <div className="bg-gradient-to-br from-lime-50 to-emerald-50 dark:from-lime-950/30 dark:to-emerald-950/20 rounded-3xl p-8 shadow-sm overflow-hidden relative transition-colors duration-300">
+                <div className="editorial-panel relative overflow-hidden p-8 transition-colors duration-300">
                   <img
                     src="/progress.png"
                     alt="Progress"
                     className="absolute right-0 top-0 w-40 h-40 opacity-30 image-soften"
                   />
                   <div className="text-center relative z-10">
-                    <div className="text-6xl font-bold text-lime-600 mb-2">{stats.total}</div>
-                    <div className="text-lg text-gray-700 dark:text-gray-200 font-medium">累计学习单词</div>
+                    <div className="editorial-caption">Archive volume</div>
+                    <div className="mt-3 text-6xl font-semibold text-[var(--editorial-accent)]">{stats.total}</div>
+                    <div className="mt-2 text-lg font-medium">累计学习单词</div>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-white dark:bg-wise-card-dark rounded-3xl p-6 shadow-sm transition-colors duration-300">
+                  <div className="editorial-panel p-6">
                     <div className="text-center">
-                      <div className="text-3xl font-bold text-gray-900 dark:text-white mb-2">{stats.today}</div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400">今日学习</div>
+                      <div className="text-4xl font-semibold mb-2">{stats.today}</div>
+                      <div className="text-sm text-[var(--editorial-muted)]">今日学习</div>
                     </div>
                   </div>
-                  <div className="bg-white dark:bg-wise-card-dark rounded-3xl p-6 shadow-sm transition-colors duration-300">
+                  <div className="editorial-panel p-6">
                     <div className="text-center">
-                      <div className="text-3xl font-bold text-gray-900 dark:text-white mb-2">{stats.thisWeek}</div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400">本周学习</div>
+                      <div className="text-4xl font-semibold mb-2">{stats.thisWeek}</div>
+                      <div className="text-sm text-[var(--editorial-muted)]">本周学习</div>
                     </div>
                   </div>
                 </div>
 
-                <div className="bg-white dark:bg-wise-card-dark rounded-3xl p-6 shadow-sm transition-colors duration-300">
-                  <h3 className="font-semibold text-gray-900 dark:text-white mb-4">学习趋势</h3>
+                <div className="editorial-panel p-6">
+                  <h3 className="editorial-serif mb-4 text-2xl font-semibold">学习趋势</h3>
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600 dark:text-gray-400">日均学习</span>
-                      <span className="text-lg font-bold text-gray-900 dark:text-white">
+                      <span className="text-sm text-[var(--editorial-muted)]">日均学习</span>
+                      <span className="text-lg font-semibold">
                         {stats.total > 0 ? Math.round(stats.total / 7) : 0}
                       </span>
                     </div>
-                    <div className="w-full bg-gray-100 dark:bg-black/20 rounded-full h-2">
+                    <div className="h-2 w-full rounded-full bg-[rgba(39,36,31,0.08)]">
                       <div
-                        className="bg-lime-500 h-2 rounded-full transition-all"
+                        className="h-2 rounded-full bg-[var(--editorial-accent)] transition-all"
                         style={{ width: `${Math.min((stats.today / 10) * 100, 100)}%` }}
                       />
                     </div>
@@ -1200,24 +1254,25 @@ export default function Home() {
           {/* Name Edit Modal */}
           {activeTab === 'profile' && isEditingName && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-              <div className="bg-white dark:bg-wise-card-dark rounded-3xl p-6 w-full max-w-sm shadow-xl transition-colors duration-300">
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">修改昵称</h3>
+              <div className="w-full max-w-sm rounded-[2rem] border border-[var(--editorial-border)] bg-[var(--editorial-paper)] p-6 shadow-xl">
+                <p className="editorial-kicker">Profile edit</p>
+                <h3 className="editorial-serif mb-4 mt-3 text-3xl font-semibold tracking-[-0.04em]">修改昵称</h3>
                 <input
                   value={newName}
                   onChange={e => setNewName(e.target.value)}
                   placeholder="输入新名字"
-                  className="w-full p-3 mb-6 rounded-xl bg-gray-50 dark:bg-black/20 text-gray-900 dark:text-white border-0 focus:ring-2 focus:ring-wise-lime transition-all"
+                  className="mb-6 w-full rounded-2xl border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.7)] p-3 text-[var(--editorial-ink)] outline-none transition-all focus:border-[var(--editorial-accent)]"
                 />
                 <div className="flex gap-3">
                   <button
                     onClick={() => setIsEditingName(false)}
-                    className="flex-1 py-3 px-4 bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-300 rounded-xl font-medium"
+                    className="flex-1 rounded-2xl border border-[var(--editorial-border)] bg-[var(--editorial-panel)] px-4 py-3 font-medium text-[var(--editorial-muted)]"
                   >
                     取消
                   </button>
                   <button
                     onClick={handleUpdateName}
-                    className="flex-1 py-3 px-4 bg-wise-lime text-black rounded-xl font-bold"
+                    className="flex-1 rounded-2xl bg-[var(--editorial-accent)] px-4 py-3 font-bold text-black"
                   >
                     保存
                   </button>
@@ -1229,19 +1284,20 @@ export default function Home() {
           {/* About Modal */}
           {activeTab === 'profile' && showAbout && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setShowAbout(false)}>
-              <div className="bg-white dark:bg-wise-card-dark rounded-3xl p-8 w-full max-w-sm shadow-xl text-center transition-colors duration-300" onClick={e => e.stopPropagation()}>
-                <img src="/apple-icon.png" alt="Logo" className="w-20 h-20 mx-auto mb-4 rounded-2xl shadow-md" />
-                <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Snapshot</h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Version 1.0.0</p>
-                <div className="text-left text-sm text-gray-600 dark:text-gray-300 space-y-2 mb-8 bg-gray-50 dark:bg-black/20 p-4 rounded-xl">
+              <div className="w-full max-w-sm rounded-[2rem] border border-[var(--editorial-border)] bg-[var(--editorial-paper)] p-8 text-center shadow-xl" onClick={e => e.stopPropagation()}>
+                <img src="/logo-compact.png" alt="Logo" className="mx-auto mb-4 h-20 w-20 rounded-[1.5rem] shadow-md" />
+                <p className="editorial-kicker">App note</p>
+                <h3 className="editorial-serif mb-2 mt-3 text-3xl font-semibold tracking-[-0.04em]">Snapshot</h3>
+                <p className="mb-6 text-sm text-[var(--editorial-muted)]">Version 1.0.0</p>
+                <div className="mb-8 rounded-[1.5rem] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.72)] p-4 text-left text-sm leading-7 text-[var(--editorial-muted)]">
                   <p>📸 拍照识别单词</p>
                   <p>🧠 AI 智能解析</p>
                   <p>📊 学习进度追踪</p>
-                  <p>🎨 Wise 风格设计</p>
+                  <p>✦ Editorial learning desk</p>
                 </div>
                 <button
                   onClick={() => setShowAbout(false)}
-                  className="w-full py-3 px-4 bg-gray-900 dark:bg-white text-white dark:text-black rounded-xl font-bold"
+                  className="w-full rounded-2xl bg-[var(--editorial-ink)] px-4 py-3 font-bold text-[var(--editorial-paper)]"
                 >
                   关闭
                 </button>
@@ -1252,13 +1308,13 @@ export default function Home() {
           {/* Profile Tab */}
           {activeTab === 'profile' && (
             <PageTransition key="profile" className="space-y-6">
-              <div className="bg-white dark:bg-wise-card-dark rounded-3xl p-6 shadow-sm transition-colors duration-300">
+              <div className="editorial-panel p-6 sm:p-8">
                 <div className="flex items-center gap-4 mb-6">
                   <div className="relative">
                     {user?.imageUrl ? (
-                      <img src={user.imageUrl} alt="Profile" className="w-16 h-16 rounded-full object-cover ring-4 ring-gray-50 dark:ring-black/20" />
+                      <img src={user.imageUrl} alt="Profile" className="h-16 w-16 rounded-full object-cover ring-4 ring-[rgba(39,36,31,0.05)]" />
                     ) : (
-                      <div className="w-16 h-16 bg-wise-lime rounded-full flex items-center justify-center text-black">
+                      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--editorial-accent)] text-black">
                         <UserIcon className="w-8 h-8" />
                       </div>
                     )}
@@ -1267,33 +1323,34 @@ export default function Home() {
                         setNewName(user?.firstName || '');
                         setIsEditingName(true);
                       }}
-                      className="absolute -bottom-1 -right-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-white p-1.5 rounded-full shadow-md hover:scale-110 transition-transform"
+                      className="absolute -bottom-1 -right-1 rounded-full bg-[var(--editorial-panel)] p-1.5 text-[var(--editorial-ink)] shadow-md transition-transform hover:scale-110"
                     >
                       <div className="w-3 h-3">✏️</div>
                     </button>
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                    <p className="editorial-kicker mb-2">Profile</p>
+                    <h2 className="editorial-serif text-3xl font-semibold">
                       {user?.firstName || user?.fullName || '学习者'}
                     </h2>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                    <p className="text-sm text-[var(--editorial-muted)]">
                       {user?.primaryEmailAddress?.emailAddress || '持续进步中'}
                     </p>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-4 p-4 bg-gray-50 dark:bg-black/20 rounded-2xl">
+                <div className="grid grid-cols-3 gap-4 rounded-[1.75rem] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.7)] p-4">
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-gray-900 dark:text-white">{stats.total}</div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">总词汇</div>
+                    <div className="text-2xl font-semibold">{stats.total}</div>
+                    <div className="mt-1 text-xs text-[var(--editorial-muted)]">总词汇</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-gray-900 dark:text-white">{stats.thisWeek}</div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">本周</div>
+                    <div className="text-2xl font-semibold">{stats.thisWeek}</div>
+                    <div className="mt-1 text-xs text-[var(--editorial-muted)]">本周</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-gray-900 dark:text-white">{stats.today}</div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">今日</div>
+                    <div className="text-2xl font-semibold">{stats.today}</div>
+                    <div className="mt-1 text-xs text-[var(--editorial-muted)]">今日</div>
                   </div>
                 </div>
               </div>
@@ -1302,15 +1359,16 @@ export default function Home() {
                 {/* Learning Reminder Removed */}
 
                 {billing && (
-                  <div className="rounded-3xl bg-[#f8f4ee] p-5 shadow-sm">
+                  <div className="editorial-panel p-5">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="text-sm font-medium text-gray-900">会员与额度</p>
-                        <p className="mt-1 text-sm text-gray-500">
+                        <p className="editorial-caption">Membership</p>
+                        <p className="editorial-serif mt-2 text-2xl font-semibold">会员与额度</p>
+                        <p className="mt-2 text-sm leading-7 text-[var(--editorial-muted)]">
                           状态：{billing.subscriptionStatus}，剩余 {billing.remaining}/{billing.monthlyLimit}
                         </p>
                         {billing.trialEndsAt && (
-                          <p className="mt-1 text-xs text-gray-400">
+                          <p className="mt-1 text-xs text-[var(--editorial-muted)]">
                             试用结束：{new Date(billing.trialEndsAt).toLocaleString('zh-CN')}
                           </p>
                         )}
@@ -1320,7 +1378,7 @@ export default function Home() {
                           setShowBillingDrawer(true);
                           void trackClientEvent('billing_cta_clicked', { location: 'profile_card' });
                         }}
-                        className="rounded-full bg-gray-900 px-4 py-2 text-xs font-semibold text-white"
+                        className="rounded-full bg-[var(--editorial-ink)] px-4 py-2 text-xs font-semibold text-[var(--editorial-paper)]"
                       >
                         {billing.subscriptionStatus === 'inactive' ? '升级' : '查看'}
                       </button>
@@ -1328,11 +1386,11 @@ export default function Home() {
                   </div>
                 )}
 
-                <div className="bg-white dark:bg-wise-card-dark rounded-3xl p-5 shadow-sm flex items-center justify-between transition-colors duration-300">
-                  <span className="text-gray-900 dark:text-white font-medium">深色模式</span>
+                <div className="editorial-panel flex items-center justify-between p-5">
+                  <span className="font-medium">深色模式</span>
                   <button
                     onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
-                    className={`w-11 h-6 rounded-full transition-colors relative ${resolvedTheme === 'dark' ? 'bg-wise-lime' : 'bg-gray-200'}`}
+                    className={`relative h-6 w-11 rounded-full transition-colors ${resolvedTheme === 'dark' ? 'bg-[var(--editorial-accent)]' : 'bg-gray-200'}`}
                   >
                     <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-all ${resolvedTheme === 'dark' ? 'left-6' : 'left-1'}`}></div>
                   </button>
@@ -1340,10 +1398,10 @@ export default function Home() {
 
                 <button
                   onClick={() => setShowAbout(true)}
-                  className="w-full bg-white dark:bg-wise-card-dark rounded-3xl p-5 shadow-sm flex items-center justify-between transition-colors duration-300 hover:bg-gray-50 dark:hover:bg-white/5"
+                  className="editorial-panel flex w-full items-center justify-between p-5 text-left transition-colors duration-300"
                 >
-                  <span className="text-gray-900 dark:text-white font-medium">关于应用</span>
-                  <span className="text-gray-400">{"›"}</span>
+                  <span className="font-medium">关于应用</span>
+                  <span className="text-[var(--editorial-muted)]">{"›"}</span>
                 </button>
               </div>
 
@@ -1353,20 +1411,20 @@ export default function Home() {
       </main>
 
       {/* Bottom Navigation - Wise Style */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-wise-card-dark border-t border-gray-200 dark:border-white/5 safe-area-inset-bottom transition-colors duration-300">
-        <div className="max-w-6xl mx-auto px-4">
-          <div className="flex items-center justify-around py-3">
+      <nav className="safe-area-inset-bottom fixed bottom-4 left-0 right-0 z-40 transition-colors duration-300">
+        <div className="mx-auto max-w-3xl px-4">
+          <div className="editorial-panel flex items-center justify-around rounded-[2rem] px-2 py-3">
             <button
               onClick={() => {
                 setActiveTab('home');
                 impact(ImpactStyle.Light);
               }}
-              className={`flex flex-col items-center gap-1 px-6 py-2 rounded-2xl transition-all ${activeTab === 'home'
-                ? 'text-wise-lime'
-                : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+              className={`flex flex-col items-center gap-1 rounded-2xl px-6 py-2 transition-all ${activeTab === 'home'
+                ? 'text-[var(--editorial-accent)]'
+                : 'text-[var(--editorial-muted)] hover:text-[var(--editorial-ink)]'
                 }`}
             >
-              <HomeIcon className={`w-6 h-6 ${activeTab === 'home' ? 'fill-wise-lime' : ''}`} />
+              <HomeIcon className={`h-6 w-6 ${activeTab === 'home' ? 'fill-[var(--editorial-accent)]' : ''}`} />
               <span className="text-xs font-medium">主页</span>
             </button>
 
@@ -1375,12 +1433,12 @@ export default function Home() {
                 setActiveTab('history');
                 impact(ImpactStyle.Light);
               }}
-              className={`flex flex-col items-center gap-1 px-6 py-2 rounded-2xl transition-all ${activeTab === 'history'
-                ? 'text-wise-lime'
-                : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+              className={`flex flex-col items-center gap-1 rounded-2xl px-6 py-2 transition-all ${activeTab === 'history'
+                ? 'text-[var(--editorial-accent)]'
+                : 'text-[var(--editorial-muted)] hover:text-[var(--editorial-ink)]'
                 }`}
             >
-              <BookOpen className={`w-6 h-6 ${activeTab === 'history' ? 'fill-wise-lime' : ''}`} />
+              <BookOpen className={`h-6 w-6 ${activeTab === 'history' ? 'fill-[var(--editorial-accent)]' : ''}`} />
               <span className="text-xs font-medium">记录</span>
             </button>
 
@@ -1389,12 +1447,12 @@ export default function Home() {
                 setActiveTab('stats');
                 impact(ImpactStyle.Light);
               }}
-              className={`flex flex-col items-center gap-1 px-6 py-2 rounded-2xl transition-all ${activeTab === 'stats'
-                ? 'text-wise-lime'
-                : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+              className={`flex flex-col items-center gap-1 rounded-2xl px-6 py-2 transition-all ${activeTab === 'stats'
+                ? 'text-[var(--editorial-accent)]'
+                : 'text-[var(--editorial-muted)] hover:text-[var(--editorial-ink)]'
                 }`}
             >
-              <BarChart3 className={`w-6 h-6 ${activeTab === 'stats' ? 'fill-wise-lime' : ''}`} />
+              <BarChart3 className={`h-6 w-6 ${activeTab === 'stats' ? 'fill-[var(--editorial-accent)]' : ''}`} />
               <span className="text-xs font-medium">统计</span>
             </button>
 
@@ -1403,12 +1461,12 @@ export default function Home() {
                 setActiveTab('profile');
                 impact(ImpactStyle.Light);
               }}
-              className={`flex flex-col items-center gap-1 px-6 py-2 rounded-2xl transition-all ${activeTab === 'profile'
-                ? 'text-wise-lime'
-                : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+              className={`flex flex-col items-center gap-1 rounded-2xl px-6 py-2 transition-all ${activeTab === 'profile'
+                ? 'text-[var(--editorial-accent)]'
+                : 'text-[var(--editorial-muted)] hover:text-[var(--editorial-ink)]'
                 }`}
             >
-              <UserIcon className={`w-6 h-6 ${activeTab === 'profile' ? 'fill-wise-lime' : ''}`} />
+              <UserIcon className={`h-6 w-6 ${activeTab === 'profile' ? 'fill-[var(--editorial-accent)]' : ''}`} />
               <span className="text-xs font-medium">我的</span>
             </button>
           </div>
@@ -1422,6 +1480,7 @@ export default function Home() {
           void refreshBilling();
         }}
       />
+      <InstallAppPrompt enabled={isSignedIn && !isNative} />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, isToday } from 'date-fns';
+import { eachDayOfInterval, endOfMonth, format, isSameDay, isSameMonth, isToday, startOfMonth } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 
 interface CheckInData {
@@ -17,48 +17,39 @@ export default function CalendarView({ checkIns, currentMonth = new Date() }: Ca
     const monthStart = startOfMonth(currentMonth);
     const monthEnd = endOfMonth(currentMonth);
     const daysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd });
-
-    // Get the day of week for first day (0 = Sunday, 6 = Saturday)
     const firstDayOfWeek = monthStart.getDay();
-
-    // Check if a date has check-in
-    const hasCheckIn = (date: Date) => {
-        return checkIns.some(checkIn => {
-            const checkInDate = new Date(checkIn.date);
-            return isSameDay(checkInDate, date);
-        });
-    };
-
-    // Create calendar grid with empty cells for padding
     const calendarDays = [];
 
-    // Add empty cells for days before month starts
+    const hasCheckIn = (date: Date) => checkIns.some((checkIn) => isSameDay(new Date(checkIn.date), date));
+
     for (let i = 0; i < firstDayOfWeek; i++) {
         calendarDays.push(null);
     }
 
-    // Add all days of the month
     calendarDays.push(...daysInMonth);
 
     return (
-        <div className="bg-white dark:bg-wise-card-dark rounded-3xl p-6 shadow-sm transition-colors duration-300">
-            {/* Month header */}
-            <div className="text-center mb-4">
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white">
-                    {format(currentMonth, 'yyyy年MM月', { locale: zhCN })}
-                </h3>
+        <div className="editorial-panel p-6 sm:p-8">
+            <div className="mb-5 flex items-end justify-between gap-4">
+                <div>
+                    <p className="editorial-kicker">Attendance</p>
+                    <h3 className="editorial-serif mt-3 text-3xl font-semibold tracking-[-0.04em] text-[var(--editorial-ink)]">
+                        {format(currentMonth, 'yyyy年MM月', { locale: zhCN })}
+                    </h3>
+                </div>
+                <div className="rounded-full border border-[var(--editorial-border)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--editorial-muted)]">
+                    {checkIns.length} days marked
+                </div>
             </div>
 
-            {/* Weekday headers */}
-            <div className="grid grid-cols-7 gap-2 mb-2">
-                {['一', '二', '三', '四', '五', '六', '日'].map(day => (
-                    <div key={day} className="text-center text-xs text-gray-500 dark:text-gray-400 font-medium">
+            <div className="mb-3 grid grid-cols-7 gap-2">
+                {['一', '二', '三', '四', '五', '六', '日'].map((day) => (
+                    <div key={day} className="text-center text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--editorial-muted)]">
                         {day}
                     </div>
                 ))}
             </div>
 
-            {/* Calendar grid */}
             <div className="grid grid-cols-7 gap-2">
                 {calendarDays.map((day, index) => {
                     if (day === null) {
@@ -72,17 +63,15 @@ export default function CalendarView({ checkIns, currentMonth = new Date() }: Ca
                     return (
                         <div
                             key={day.toISOString()}
-                            className={`
-                aspect-square flex items-center justify-center rounded-xl text-sm font-medium
-                transition-all duration-200
-                ${!isCurrentMonth ? 'text-gray-300 dark:text-gray-600' : ''}
-                ${hasCheck
-                                    ? 'bg-wise-lime text-black shadow-md'
+                            className={[
+                                'aspect-square flex items-center justify-center rounded-2xl border text-sm font-medium transition-all duration-200',
+                                !isCurrentMonth ? 'border-transparent text-[rgba(39,36,31,0.2)]' : '',
+                                hasCheck
+                                    ? 'border-[var(--editorial-accent)] bg-[var(--editorial-accent)] text-white shadow-sm'
                                     : isCurrentDay
-                                        ? 'bg-lime-100 dark:bg-lime-900/40 text-lime-700 dark:text-lime-200 ring-2 ring-wise-lime'
-                                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5'
-                                }
-              `}
+                                        ? 'border-[var(--editorial-accent)] bg-[rgba(149,199,85,0.12)] text-[var(--editorial-ink)]'
+                                        : 'border-[var(--editorial-border)] bg-[rgba(255,251,244,0.72)] text-[var(--editorial-ink)]'
+                            ].join(' ')}
                         >
                             {format(day, 'd')}
                         </div>
@@ -90,14 +79,13 @@ export default function CalendarView({ checkIns, currentMonth = new Date() }: Ca
                 })}
             </div>
 
-            {/* Legend */}
-            <div className="flex items-center justify-center gap-4 mt-4 text-xs text-gray-600 dark:text-gray-400">
-                <div className="flex items-center gap-1">
-                    <div className="w-4 h-4 rounded bg-wise-lime"></div>
+            <div className="mt-5 flex flex-wrap items-center gap-4 text-xs text-[var(--editorial-muted)]">
+                <div className="flex items-center gap-2">
+                    <div className="h-4 w-4 rounded bg-[var(--editorial-accent)]" />
                     <span>已打卡</span>
                 </div>
-                <div className="flex items-center gap-1">
-                    <div className="w-4 h-4 rounded ring-2 ring-wise-lime bg-lime-100 dark:bg-lime-900/40"></div>
+                <div className="flex items-center gap-2">
+                    <div className="h-4 w-4 rounded border border-[var(--editorial-accent)] bg-[rgba(149,199,85,0.12)]" />
                     <span>今日</span>
                 </div>
             </div>

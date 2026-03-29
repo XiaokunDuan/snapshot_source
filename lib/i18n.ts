@@ -43,6 +43,14 @@ type Messages = {
     trialCharge: string;
     todayDue: string;
   };
+  install: {
+    title: string;
+    subtitle: string;
+    iosHint: string;
+    iosSteps: string;
+    action: string;
+    later: string;
+  };
 };
 
 export const DEFAULT_LOCALE: Locale = 'zh-CN';
@@ -91,6 +99,14 @@ export const messages: Record<Locale, Messages> = {
       trialCharge: '试用 3 天后付费总额',
       todayDue: '今日应付',
     },
+    install: {
+      title: '下载为 App',
+      subtitle: '把 Snapshot 放到手机主屏幕，下次就像原生 App 一样直接打开。',
+      iosHint: 'iPhone / iPad 安装方式',
+      iosSteps: '点击 Safari 分享按钮，再选择“添加到主屏幕”。',
+      action: '安装到手机',
+      later: '稍后再说',
+    },
   },
   en: {
     appName: 'Snapshot',
@@ -134,6 +150,14 @@ export const messages: Record<Locale, Messages> = {
       subtotal: 'Subtotal',
       trialCharge: 'Charged after 3-day trial',
       todayDue: 'Due today',
+    },
+    install: {
+      title: 'Install as an app',
+      subtitle: 'Keep Snapshot on your home screen and open it like a native app next time.',
+      iosHint: 'How to install on iPhone / iPad',
+      iosSteps: 'Tap the Safari share button, then choose “Add to Home Screen”.',
+      action: 'Install now',
+      later: 'Maybe later',
     },
   },
 };

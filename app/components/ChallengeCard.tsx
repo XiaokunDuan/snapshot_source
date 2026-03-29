@@ -1,6 +1,6 @@
 'use client';
 
-import { Zap, Shield } from 'lucide-react';
+import { Shield, Zap } from 'lucide-react';
 
 interface ChallengeCardProps {
     currentStreak: number;
@@ -20,71 +20,66 @@ export default function ChallengeCard({
     const progress = (currentStreak / targetDays) * 100;
 
     return (
-        <div className="bg-gradient-to-br from-gray-100 to-gray-200 dark:from-wise-card-dark dark:to-black/40 rounded-3xl p-6 shadow-sm relative overflow-hidden transition-colors duration-300">
-            {/* Background decoration */}
-            <div className="absolute top-0 right-0 w-32 h-32 bg-white/20 dark:bg-white/5 rounded-full -translate-y-8 translate-x-8"></div>
+        <div className="editorial-panel relative overflow-hidden p-6 sm:p-8">
+            <div className="absolute -right-10 top-0 h-36 w-36 rounded-full bg-[rgba(149,199,85,0.16)] blur-2xl" />
 
             <div className="relative z-10">
-                {/* Header */}
-                <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                        <div className="p-2 bg-white dark:bg-white/10 rounded-xl">
-                            <Zap className="w-6 h-6 text-wise-lime" />
+                <div className="mb-6 flex items-start justify-between gap-6">
+                    <div className="max-w-xl">
+                        <div className="editorial-kicker">
+                            <Zap className="h-4 w-4 text-[var(--editorial-accent)]" />
+                            Daily streak
                         </div>
-                        <div>
-                            <h3 className="text-lg font-bold text-gray-900 dark:text-white">不断电学习挑战</h3>
-                            <p className="text-xs text-gray-600 dark:text-gray-400">
-                                连续背单词 · 花3分钟 · 保持你的战绩亮着
-                            </p>
-                        </div>
+                        <h3 className="editorial-serif mt-4 text-3xl font-semibold tracking-[-0.04em] text-[var(--editorial-ink)] sm:text-4xl">
+                            不断电学习挑战
+                        </h3>
+                        <p className="mt-3 text-sm leading-7 text-[var(--editorial-muted)]">
+                            连续学习不是靠堆任务，而是让每天都留下一次有效识别。今天只要再完成一次，你的档案就会继续发光。
+                        </p>
                     </div>
 
-                    {/* Circle progress indicator */}
-                    <div className="w-16 h-16 rounded-full bg-white dark:bg-white/10 flex items-center justify-center shadow-md">
-                        <div className="text-center">
-                            <div className="text-2xl font-bold text-wise-lime">{currentStreak}</div>
-                            <div className="text-xs text-gray-500 dark:text-gray-400">天</div>
-                        </div>
+                    <div className="min-w-[104px] rounded-[28px] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.78)] px-4 py-5 text-center shadow-sm">
+                        <div className="text-4xl font-semibold text-[var(--editorial-accent)]">{currentStreak}</div>
+                        <div className="mt-1 text-xs uppercase tracking-[0.18em] text-[var(--editorial-muted)]">days live</div>
                     </div>
                 </div>
 
-                {/* Stats row */}
-                <div className="flex items-center justify-between mb-4 text-sm">
-                    <div className="text-gray-700 dark:text-gray-300">
-                        喔，今天的电力还没续上 · 花3分钟 · 保持你的战绩亮着
+                <div className="grid gap-4 sm:grid-cols-[1.05fr_0.95fr]">
+                    <div className="rounded-[28px] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.78)] p-5">
+                        <div className="flex items-center justify-between">
+                            <span className="text-xs uppercase tracking-[0.2em] text-[var(--editorial-muted)]">Challenge progress</span>
+                            <span className="text-sm font-medium text-[var(--editorial-muted)]">{currentStreak}/{targetDays} 天</span>
+                        </div>
+                        <div className="mt-4 h-2 w-full rounded-full bg-[rgba(39,36,31,0.08)]">
+                            <div
+                                className="h-2 rounded-full bg-[var(--editorial-accent)] transition-all duration-500"
+                                style={{ width: `${Math.min(progress, 100)}%` }}
+                            />
+                        </div>
+                        <div className="mt-4 flex items-center justify-between text-sm text-[var(--editorial-muted)]">
+                            <span>历史最佳 {maxStreak} 天</span>
+                            <span>{Math.max(targetDays - currentStreak, 0)} 天到阶段目标</span>
+                        </div>
+                    </div>
+
+                    <div className="rounded-[28px] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.78)] p-5">
+                        <div className="flex items-center gap-2 text-sm text-[var(--editorial-muted)]">
+                            <Shield className="h-4 w-4 text-amber-500" />
+                            保护机制
+                        </div>
+                        <div className="mt-3 text-3xl font-semibold text-[var(--editorial-ink)]">{shieldCards}</div>
+                        <p className="mt-2 text-sm leading-7 text-[var(--editorial-muted)]">
+                            {shieldCards > 0 ? '当前已有断电保护卡，偶发中断时仍能维持一部分战绩。' : '当前没有断电保护卡，建议尽快补一次学习动作。'}
+                        </p>
                     </div>
                 </div>
 
-                {/* CTA Button */}
                 <button
                     onClick={onStartLearning}
-                    className="w-full bg-white dark:bg-wise-lime hover:bg-gray-50 dark:hover:bg-lime-400 text-wise-lime dark:text-black font-semibold py-3 px-6 rounded-2xl transition-all shadow-md hover:shadow-lg"
+                    className="mt-6 w-full rounded-full bg-[var(--editorial-ink)] px-6 py-4 font-semibold text-[var(--editorial-paper)] transition-all hover:opacity-92"
                 >
                     开始背单词
                 </button>
-
-                {/* Shield cards footer */}
-                {shieldCards > 0 && (
-                    <div className="mt-4 flex items-center justify-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                        <Shield className="w-4 h-4 text-amber-500" />
-                        <span>断电保护卡</span>
-                        <span className="font-bold text-gray-900 dark:text-white">已装备 / +</span>
-                    </div>
-                )}
-
-                {/* Progress bar */}
-                <div className="mt-4">
-                    <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400 mb-1">
-                        <span>进度</span>
-                        <span>{currentStreak}/{targetDays} 天</span>
-                    </div>
-                    <div className="w-full bg-gray-300 dark:bg-gray-700 rounded-full h-2">
-                        <div
-                            className="bg-wise-lime h-2 rounded-full transition-all duration-500"
-                            style={{ width: `${Math.min(progress, 100)}%` }}
-                        />
-                    </div>
-                </div>
             </div>
         </div>
     );

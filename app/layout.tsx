@@ -4,10 +4,17 @@ import "./globals.css";
 
 import { ThemeProvider } from "./components/ThemeProvider";
 import { LocaleProvider } from "./components/LocaleProvider";
+import { PWARegistration } from "./components/PWARegistration";
 
 export const metadata: Metadata = {
   title: "Snapshot - AI 学英语",
   description: "Your AI-powered language learning companion",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Snapshot",
+  },
 };
 
 export default function RootLayout({
@@ -24,7 +31,10 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <LocaleProvider>{children}</LocaleProvider>
+          <LocaleProvider>
+            <PWARegistration />
+            {children}
+          </LocaleProvider>
         </ThemeProvider>
       </body>
     </html>

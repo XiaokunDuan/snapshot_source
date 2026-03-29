@@ -1,11 +1,17 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
+  --background: #f4efe6;
   --foreground: #171717;
-  --wise-lime: #9FE870;
-  --wise-dark-bg: #0E1217; /* Deep Navy/Black */
-  --wise-card-dark: #1C232B; /* Slightly lighter navy for cards */
+  --wise-lime: #b6f36a;
+  --wise-dark-bg: #0d1117;
+  --wise-card-dark: #171e28;
+  --editorial-paper: #f6f1e8;
+  --editorial-ink: #161511;
+  --editorial-muted: #6e675b;
+  --editorial-border: rgba(22, 21, 17, 0.12);
+  --editorial-panel: rgba(255, 255, 255, 0.78);
+  --editorial-accent: #d7ff64;
 }
 
 @theme inline {
@@ -14,19 +20,76 @@
   --color-wise-lime: var(--wise-lime);
   --color-wise-dark-bg: var(--wise-dark-bg);
   --color-wise-card-dark: var(--wise-card-dark);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: "Inter", "Avenir Next", "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", monospace;
 }
 
 /* Class-based dark mode for next-themes */
 .dark {
   --background: var(--wise-dark-bg);
   --foreground: #ededed;
+  --editorial-paper: #0d1117;
+  --editorial-ink: #f5f1e8;
+  --editorial-muted: rgba(245, 241, 232, 0.68);
+  --editorial-border: rgba(245, 241, 232, 0.12);
+  --editorial-panel: rgba(17, 22, 30, 0.82);
+  --editorial-accent: #b6f36a;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: "Inter", "Avenir Next", "Segoe UI", sans-serif;
   transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+h1,
+h2,
+h3,
+h4,
+.editorial-serif {
+  font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  letter-spacing: -0.04em;
+}
+
+.editorial-shell {
+  background:
+    radial-gradient(circle at top left, rgba(215, 255, 100, 0.22), transparent 26%),
+    radial-gradient(circle at bottom right, rgba(18, 35, 57, 0.14), transparent 30%),
+    linear-gradient(180deg, color-mix(in srgb, var(--editorial-paper) 96%, black 4%), var(--editorial-paper));
+}
+
+.editorial-grid {
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--editorial-border) 60%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--editorial-border) 60%, transparent) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.editorial-panel {
+  background: var(--editorial-panel);
+  border: 1px solid var(--editorial-border);
+  backdrop-filter: blur(20px);
+  box-shadow: 0 12px 60px rgba(18, 24, 38, 0.08);
+}
+
+.editorial-rail {
+  border-top: 1px solid var(--editorial-border);
+  border-bottom: 1px solid var(--editorial-border);
+}
+
+.editorial-kicker {
+  font-size: 0.72rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--editorial-muted);
+}
+
+.editorial-caption {
+  color: var(--editorial-muted);
+}
+
+.editorial-accent-pill {
+  background: var(--editorial-accent);
+  color: #111;
 }
