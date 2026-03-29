@@ -133,13 +133,25 @@ export function getSubscriptionPeriod(subscription: Stripe.Subscription) {
 
 type BillingStatusRow = {
   status: string;
-  trial_ends_at: string | null;
-  current_period_start: string | null;
-  current_period_end: string | null;
+  trial_ends_at: string | Date | null;
+  current_period_start: string | Date | null;
+  current_period_end: string | Date | null;
   cancel_at_period_end: boolean;
   monthly_limit: number | null;
   analyze_count: number | null;
 };
+
+function toIsoString(value: string | Date | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  return value;
+}
 
 export function buildBillingStatus(row: BillingStatusRow | null): BillingStatus {
   if (!row) {
@@ -166,9 +178,9 @@ export function buildBillingStatus(row: BillingStatusRow | null): BillingStatus 
     monthlyLimit,
     usageCount,
     remaining: Math.max(monthlyLimit - usageCount, 0),
-    trialEndsAt: row.trial_ends_at,
-    currentPeriodStart: row.current_period_start,
-    currentPeriodEnd: row.current_period_end,
+    trialEndsAt: toIsoString(row.trial_ends_at),
+    currentPeriodStart: toIsoString(row.current_period_start),
+    currentPeriodEnd: toIsoString(row.current_period_end),
     cancelAtPeriodEnd: row.cancel_at_period_end,
   };
 }
@@ -289,7 +301,7 @@ export async function markStripeEventProcessed(eventId: string, eventType: strin
   }
 }
 
-export async function createTrialSubscription(user: AppUser) {
+export async function createBillingSetupIntent(user: AppUser) {
   const client = await getPool().connect() as DbClient;
 
   try {
@@ -302,11 +314,64 @@ export async function createTrialSubscription(user: AppUser) {
 
     const stripeCustomerId = await ensureCustomer(client, user);
     const stripe = getStripe();
+    const setupIntent = await stripe.setupIntents.create({
+      customer: stripeCustomerId,
+      automatic_payment_methods: {
+        enabled: true,
+      },
+      metadata: {
+        userId: String(user.id),
+        clerkUserId: user.clerk_user_id,
+      },
+    });
+
+    if (!setupIntent.client_secret) {
+      throw new Error('Stripe did not return a setup intent client secret');
+    }
+
+    return {
+      customerId: stripeCustomerId,
+      setupIntentId: setupIntent.id,
+      clientSecret: setupIntent.client_secret,
+      publishableKey: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '',
+    };
+  } finally {
+    client.release();
+  }
+}
+
+export async function activateTrialSubscription(user: AppUser, setupIntentId: string) {
+  const client = await getPool().connect() as DbClient;
+
+  try {
+    await ensureBillingTables(client);
+    const status = await getBillingStatus(user.id, client);
+
+    if (!['inactive', 'free'].includes(status.subscriptionStatus)) {
+      throw new Error('An existing subscription already exists');
+    }
+
+    const stripeCustomerId = await ensureCustomer(client, user);
+    const stripe = getStripe();
+    const setupIntent = await stripe.setupIntents.retrieve(setupIntentId);
+
+    if (String(setupIntent.customer) !== stripeCustomerId) {
+      throw new Error('Setup intent does not belong to this customer');
+    }
+
+    if (setupIntent.status !== 'succeeded') {
+      throw new Error('Payment setup has not completed');
+    }
+
+    if (!setupIntent.payment_method) {
+      throw new Error('No payment method was attached to the setup intent');
+    }
+
     const subscription = await stripe.subscriptions.create({
       customer: stripeCustomerId,
       items: [{ price: getStripePriceId() }],
       trial_period_days: 3,
-      payment_behavior: 'default_incomplete',
+      default_payment_method: String(setupIntent.payment_method),
       payment_settings: {
         save_default_payment_method: 'on_subscription',
       },
@@ -314,21 +379,13 @@ export async function createTrialSubscription(user: AppUser) {
         userId: String(user.id),
         clerkUserId: user.clerk_user_id,
       },
-      expand: ['pending_setup_intent'],
     });
 
     await upsertSubscriptionFromStripe(subscription, client);
 
-    const setupIntent = subscription.pending_setup_intent as Stripe.SetupIntent | null;
-    if (!setupIntent?.client_secret) {
-      throw new Error('Stripe did not return a setup intent client secret');
-    }
-
     return {
       subscriptionId: subscription.id,
       customerId: stripeCustomerId,
-      clientSecret: setupIntent.client_secret,
-      publishableKey: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '',
     };
   } finally {
     client.release();

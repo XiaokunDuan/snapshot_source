@@ -22,12 +22,43 @@ interface GenerateLanguageVariantsInput {
 }
 
 function extractJson(content: string) {
-  const fenced = content.match(/```json\s*([\s\S]*?)```/i);
+  const fenced = content.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fenced?.[1]) {
     return fenced[1];
   }
 
   return content;
+}
+
+function extractBalancedJson(content: string) {
+  const trimmed = content.trim();
+  const firstBrace = trimmed.indexOf('{');
+  const lastBrace = trimmed.lastIndexOf('}');
+
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    return trimmed.slice(firstBrace, lastBrace + 1);
+  }
+
+  return trimmed;
+}
+
+function parseJsonLenient(content: string) {
+  const candidates = [
+    content,
+    extractJson(content),
+    extractBalancedJson(content),
+    extractBalancedJson(extractJson(content)),
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate) as AnalyzeVariants;
+    } catch {
+      continue;
+    }
+  }
+
+  throw new SyntaxError('Unable to parse JSON payload');
 }
 
 async function requestTextCompletion(payload: unknown, textApiBaseUrl: string, textApiKey: string) {
@@ -56,15 +87,14 @@ async function requestTextCompletion(payload: unknown, textApiBaseUrl: string, t
 }
 
 async function parseLanguagePayload(rawContent: string, model: string, textApiBaseUrl: string, textApiKey: string) {
-  const extracted = extractJson(rawContent);
-
   try {
-    return JSON.parse(extracted) as AnalyzeVariants;
+    return parseJsonLenient(rawContent);
   } catch {
+    const extracted = extractBalancedJson(extractJson(rawContent));
     const repaired = await requestTextCompletion({
       model,
       temperature: 0.1,
-      max_tokens: 2400,
+      max_tokens: 1400,
       response_format: { type: 'json_object' },
       messages: [
         {
@@ -78,7 +108,7 @@ async function parseLanguagePayload(rawContent: string, model: string, textApiBa
       ],
     }, textApiBaseUrl, textApiKey);
 
-    return JSON.parse(extractJson(repaired)) as AnalyzeVariants;
+    return parseJsonLenient(repaired);
   }
 }
 
@@ -121,15 +151,16 @@ The user provides one detected object from an image and an English anchor.
 Generate learning content for exactly these languages: zh-CN, en, ja, fr, ru.
 For each language return:
 - term
-- meaning
-- phonetic
-- example
-- exampleTranslation
-- grammarNote
-- cultureNote
-- relatedForms (array of up to 3 short strings)
-- pronunciationTip
-Keep each field compact, useful, and classroom-safe.
+- meaning (max 18 words)
+- phonetic (short only)
+- example (1 short sentence, max 16 words)
+- exampleTranslation (1 short sentence)
+- grammarNote (1 short sentence, max 14 words)
+- cultureNote (1 short sentence, max 14 words)
+- relatedForms (array of up to 2 short strings)
+- pronunciationTip (1 short sentence, max 12 words)
+Keep every field compact, useful, and classroom-safe.
+Do not add explanations, headings, or extra detail.
 Do not invent unrelated objects.
 Return JSON in this exact shape:
 {
@@ -147,7 +178,10 @@ Return JSON in this exact shape:
       },
       {
         role: 'user',
-        content: JSON.stringify(input),
+        content: JSON.stringify({
+          ...input,
+          style: 'concise',
+        }),
       },
     ],
   }, textApiBaseUrl, textApiKey);

@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { SignOutButton, useUser, UserButton } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
-import { Camera as CameraIcon, BookOpen, TrendingUp, Award, User as UserIcon, Home as HomeIcon, BarChart3, Loader2, Edit2, Trash2, Sparkles, ShieldCheck, X, MoveDown } from 'lucide-react';
+import { Camera as CameraIcon, BookOpen, User as UserIcon, Home as HomeIcon, BarChart3, Loader2, Edit2, Trash2, Sparkles, ShieldCheck, X, MoveDown } from 'lucide-react';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import confetti from 'canvas-confetti';
 import { PageTransition } from '@/components/Animation';
@@ -1499,28 +1499,7 @@ export default function Home() {
                       )}
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="editorial-panel">
-                        <div className="mb-4 flex items-center gap-3">
-                          <div className="rounded-2xl border border-[var(--editorial-border)] bg-[rgba(149,199,85,0.12)] p-2">
-                            <TrendingUp className="h-5 w-5 text-[var(--editorial-accent)]" />
-                          </div>
-                          <span className="editorial-caption">{ui.week}</span>
-                        </div>
-                        <div className="text-4xl font-semibold">{stats.thisWeek}</div>
-                        <div className="mt-1 text-sm text-[var(--editorial-muted)]">{locale === 'en' ? 'New entries archived this week' : '新词进入本周档案'}</div>
-                      </div>
-                      <div className="editorial-panel">
-                        <div className="mb-4 flex items-center gap-3">
-                          <div className="rounded-2xl border border-[var(--editorial-border)] bg-[rgba(149,199,85,0.12)] p-2">
-                            <Award className="h-5 w-5 text-[var(--editorial-accent)]" />
-                          </div>
-                          <span className="editorial-caption">{ui.allTime}</span>
-                        </div>
-                        <div className="text-4xl font-semibold">{stats.total}</div>
-                        <div className="mt-1 text-sm text-[var(--editorial-muted)]">{locale === 'en' ? 'Entries recognised and saved' : '累计识别并保存的词条'}</div>
-                      </div>
-                    </div>
+                    <div />
                   </div>
                 </>
               )}

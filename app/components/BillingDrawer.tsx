@@ -16,6 +16,7 @@ interface BillingDrawerProps {
 interface CheckoutResponse {
   clientSecret: string;
   publishableKey: string;
+  setupIntentId: string;
 }
 
 function BillingForm({
@@ -51,6 +52,31 @@ function BillingForm({
       setError(result.error.message || 'Payment setup failed');
       await trackClientEvent('billing_checkout_failed', {
         message: result.error.message || 'Payment setup failed',
+      });
+      setSubmitting(false);
+      return;
+    }
+
+    const setupIntentId = result.setupIntent?.id;
+    if (!setupIntentId) {
+      setError('Payment setup did not complete correctly');
+      setSubmitting(false);
+      return;
+    }
+
+    const activation = await fetch('/api/billing/activate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ setupIntentId }),
+    });
+    const activationData = await activation.json();
+
+    if (!activation.ok) {
+      setError(activationData.error || 'Membership activation failed');
+      await trackClientEvent('billing_checkout_failed', {
+        message: activationData.error || 'Membership activation failed',
       });
       setSubmitting(false);
       return;
