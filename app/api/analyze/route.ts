@@ -54,9 +54,11 @@ export async function POST(req: NextRequest) {
         if (!billingStatus.hasAccess) {
             return NextResponse.json(
                 {
-                    error: billingStatus.subscriptionStatus === 'inactive'
-                        ? 'An active subscription or trial is required'
-                        : 'Your monthly analyze limit has been reached',
+                    error: billingStatus.subscriptionStatus === 'free'
+                        ? 'You have used all 20 free analyses'
+                        : billingStatus.subscriptionStatus === 'inactive'
+                            ? 'An active subscription or trial is required'
+                            : 'Your monthly analyze limit has been reached',
                     billingStatus,
                 },
                 { status: 402 }

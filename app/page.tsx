@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useUser, UserButton } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { Camera as CameraIcon, BookOpen, TrendingUp, Award, User as UserIcon, Home as HomeIcon, BarChart3, Loader2, Edit2, Trash2, Sparkles, ShieldCheck } from 'lucide-react';
+import { Camera as CameraIcon, BookOpen, TrendingUp, Award, User as UserIcon, Home as HomeIcon, BarChart3, Loader2, Edit2, Trash2, Sparkles, ShieldCheck, X, MoveDown } from 'lucide-react';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import confetti from 'canvas-confetti';
 import { PageTransition } from '@/components/Animation';
@@ -71,6 +71,7 @@ interface BillingStatus {
 
 const HISTORY_CACHE_KEY = 'vocabulary_history';
 const PRIMARY_LANGUAGE_KEY = 'snapshot_primary_language';
+const HOME_PROMO_DISMISSED_KEY = 'snapshot_home_promo_dismissed';
 
 function persistHistoryCache(items: HistoryItem[]) {
   localStorage.setItem(HISTORY_CACHE_KEY, JSON.stringify(items));
@@ -177,6 +178,7 @@ export default function Home() {
   const [todayStudied, setTodayStudied] = useState(0);
   const [dailyGoal] = useState(10);
   const [preferredLanguage, setPreferredLanguage] = useState<LanguageCode>(DEFAULT_LANGUAGE);
+  const [dismissedHomePromo, setDismissedHomePromo] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [editingItem, setEditingItem] = useState<HistoryItem | null>(null);
@@ -391,14 +393,26 @@ export default function Home() {
     }
   }, [preferredLanguage]);
 
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setDismissedHomePromo(window.localStorage.getItem(HOME_PROMO_DISMISSED_KEY) === '1');
+    }
+  }, []);
+
   if (!isLoaded || showSplash) {
     return <SplashScreen onFinish={() => setShowSplash(false)} />;
   }
 
+  const scrollToEntry = () => {
+    if (typeof document !== 'undefined') {
+      document.getElementById('landing-entry')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
   if (!isSignedIn) {
     return (
       <div className="editorial-shell min-h-screen text-[var(--editorial-ink)]">
-        <main className="mx-auto flex min-h-screen max-w-6xl flex-col justify-between px-5 py-6 sm:px-6 sm:py-10">
+        <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-10 px-5 py-6 sm:px-6 sm:py-10">
           <div className="flex items-center justify-between border-b border-[var(--editorial-border)] pb-5">
             <img src="/logo-compact.png" alt="Snapshot Logo" className="h-10 w-auto" />
             <div className="flex items-center gap-3">
@@ -416,20 +430,20 @@ export default function Home() {
             <div>
               <div className="editorial-kicker">
                 <Sparkles className="h-4 w-4 text-[var(--editorial-accent)]" />
-                {copy.landing.badge}
+                Visual language desk
               </div>
-              <h1 className="editorial-serif mt-6 max-w-3xl text-5xl font-semibold leading-[0.94] tracking-[-0.04em] md:text-7xl">
+              <h1 className="editorial-serif mt-6 max-w-3xl text-5xl font-semibold leading-[0.94] tracking-[-0.04em] md:text-7xl editorial-breathe">
                 {copy.landing.title}
               </h1>
               <p className="mt-6 max-w-xl text-lg leading-8 text-[var(--editorial-muted)]">
-                {copy.landing.description}
+                拍照、识别、切语言、保存进词库。先让用户理解产品，再决定是否继续深入或升级。
               </p>
               <div className="mt-8 flex flex-wrap gap-4">
                 <button
-                  onClick={() => router.push('/sign-up')}
+                  onClick={scrollToEntry}
                   className="rounded-full bg-[var(--editorial-ink)] px-7 py-4 text-sm font-semibold text-[var(--editorial-paper)]"
                 >
-                  {copy.actions.startFreeTrial}
+                  先看看怎么用
                 </button>
                 <button
                   onClick={() => router.push('/sign-in')}
@@ -438,40 +452,31 @@ export default function Home() {
                   {copy.actions.signIn}
                 </button>
               </div>
-              <div className="mt-10 grid gap-3 sm:grid-cols-3">
-                <div className="editorial-panel">
-                  <div className="editorial-caption">{copy.landing.monthlyPrice}</div>
-                  <div className="mt-3 text-3xl font-semibold">$9.90</div>
-                </div>
-                <div className="editorial-panel">
-                  <div className="editorial-caption">{copy.landing.trialLabel}</div>
-                  <div className="mt-3 text-3xl font-semibold">{copy.landing.trialLength}</div>
-                </div>
-                <div className="editorial-panel">
-                  <div className="editorial-caption">{copy.landing.quotaLabel}</div>
-                  <div className="mt-3 text-3xl font-semibold">{copy.landing.quotaValue}</div>
-                </div>
+              <div className="mt-10 flex flex-wrap gap-3 text-xs uppercase tracking-[0.22em] text-[var(--editorial-muted)]">
+                <span className="rounded-full border border-[var(--editorial-border)] px-4 py-3">camera first</span>
+                <span className="rounded-full border border-[var(--editorial-border)] px-4 py-3">20 free analyses</span>
+                <span className="rounded-full border border-[var(--editorial-border)] px-4 py-3">multilingual desk</span>
               </div>
             </div>
 
-            <div className="editorial-panel p-6 sm:p-8">
-              <div className="rounded-[1.75rem] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.86)] p-6">
+            <div className="editorial-panel p-6 sm:p-8 editorial-float">
+              <div className="rounded-[2.25rem] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.86)] p-6 dark:bg-[rgba(255,255,255,0.03)]">
                 <div className="flex items-center justify-between">
                   <h2 className="editorial-serif text-3xl font-semibold">Learning flow</h2>
                   <span className="editorial-accent-pill">mobile first</span>
                 </div>
-                <div className="mt-8 space-y-3 rounded-[1.75rem] border border-[var(--editorial-border)] bg-[var(--editorial-panel)] p-5">
+                <div className="mt-8 space-y-3 rounded-[2rem] border border-[var(--editorial-border)] bg-[var(--editorial-panel)] p-5">
                   <div className="flex items-center justify-between text-sm text-[var(--editorial-muted)]">
                     <span>1. Capture</span>
                     <span>拍照 / 上传</span>
                   </div>
                   <div className="flex items-center justify-between text-sm text-[var(--editorial-muted)]">
                     <span>2. Extract</span>
-                    <span>单词 / 音标 / 释义</span>
+                    <span>识别 / 语言切换</span>
                   </div>
                   <div className="flex items-center justify-between border-t border-[var(--editorial-border)] pt-4 text-base font-semibold">
                     <span>3. Archive</span>
-                    <span>历史 / 复习</span>
+                    <span>历史 / 复习 / 词库</span>
                   </div>
                 </div>
                 <div className="mt-6 space-y-3 text-sm text-[var(--editorial-muted)]">
@@ -483,7 +488,56 @@ export default function Home() {
                     <ShieldCheck className="h-4 w-4 text-[var(--editorial-accent)]" />
                     手机版支持安装到主屏幕，像 App 一样打开
                   </div>
+                  <div className="flex items-center gap-3">
+                    <MoveDown className="h-4 w-4 text-[var(--editorial-accent)]" />
+                    往下滑到底部，再决定是否登录开始使用
+                  </div>
                 </div>
+              </div>
+            </div>
+          </section>
+
+          <section id="landing-entry" className="grid gap-4 md:grid-cols-[1.1fr_0.9fr]">
+            <div className="editorial-panel p-7 sm:p-8">
+              <p className="editorial-kicker">What you get first</p>
+              <h2 className="editorial-serif mt-4 text-4xl font-semibold tracking-[-0.04em]">先体验，再决定要不要更深地学。</h2>
+              <div className="mt-6 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-[1.8rem] border border-[var(--editorial-border)] bg-[rgba(255,255,255,0.45)] p-5 dark:bg-[rgba(255,255,255,0.03)]">
+                  <div className="editorial-caption">Free tier</div>
+                  <div className="mt-3 text-3xl font-semibold">20</div>
+                  <p className="mt-2 text-sm text-[var(--editorial-muted)]">免费识图额度</p>
+                </div>
+                <div className="rounded-[1.8rem] border border-[var(--editorial-border)] bg-[rgba(255,255,255,0.45)] p-5 dark:bg-[rgba(255,255,255,0.03)]">
+                  <div className="editorial-caption">Modes</div>
+                  <div className="mt-3 text-3xl font-semibold">5</div>
+                  <p className="mt-2 text-sm text-[var(--editorial-muted)]">首批语言切换</p>
+                </div>
+                <div className="rounded-[1.8rem] border border-[var(--editorial-border)] bg-[rgba(255,255,255,0.45)] p-5 dark:bg-[rgba(255,255,255,0.03)]">
+                  <div className="editorial-caption">Archive</div>
+                  <div className="mt-3 text-3xl font-semibold">1 tap</div>
+                  <p className="mt-2 text-sm text-[var(--editorial-muted)]">自动归档进历史</p>
+                </div>
+              </div>
+            </div>
+            <div className="editorial-panel p-7 sm:p-8">
+              <p className="editorial-kicker">Get started</p>
+              <h2 className="editorial-serif mt-4 text-4xl font-semibold tracking-[-0.04em]">准备好了再登录，不需要一上来先付款。</h2>
+              <p className="mt-4 text-sm leading-7 text-[var(--editorial-muted)]">
+                先用 Google 或 GitHub 登录，拿到免费识图额度。只有当你真的开始使用，并且想继续扩容时，才会在应用里看到升级入口。
+              </p>
+              <div className="mt-8 flex flex-wrap gap-3">
+                <button
+                  onClick={() => router.push('/sign-up')}
+                  className="rounded-full bg-[var(--editorial-ink)] px-7 py-4 text-sm font-semibold text-[var(--editorial-paper)]"
+                >
+                  Get started
+                </button>
+                <button
+                  onClick={() => router.push('/sign-in')}
+                  className="rounded-full border border-[var(--editorial-border)] bg-[var(--editorial-panel)] px-7 py-4 text-sm font-semibold"
+                >
+                  已有账号，直接登录
+                </button>
               </div>
             </div>
           </section>
@@ -592,8 +646,12 @@ export default function Home() {
         const errorData = await analyzeRes.json();
         console.error('Analysis error:', JSON.stringify(errorData, null, 2));
         if (analyzeRes.status === 402) {
+          setCurrentImage(null);
+          setResult(null);
+          setIsAnalyzing(false);
           setShowBillingDrawer(true);
           void trackClientEvent('billing_drawer_opened', { location: 'analyze_blocked' });
+          return;
         }
         throw new Error(errorData.error || 'Analysis failed');
       }
@@ -807,6 +865,13 @@ export default function Home() {
     const variant = item.variants[preferredLanguage];
     return Boolean(variant?.term || variant?.meaning);
   });
+  const showHomeOffer = Boolean(
+    billing && !dismissedHomePromo && (
+      billing.subscriptionStatus !== 'free'
+      || history.length >= 2
+      || billing.remaining <= 5
+    )
+  );
   const currentLocale = typeof navigator !== 'undefined' && navigator.language.toLowerCase().startsWith('en')
     ? 'en-US'
     : 'zh-CN';
@@ -1021,30 +1086,45 @@ export default function Home() {
                       </div>
                     </div>
 
-                    {billing && (
-                      <div className="rounded-[2rem] bg-[#1c1914] p-6 text-white shadow-sm">
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <p className="text-xs uppercase tracking-[0.2em] text-white/60">Snapshot Pro</p>
-                          <h3 className="editorial-serif mt-3 text-3xl font-semibold leading-tight">
-                            {billing.subscriptionStatus === 'inactive' ? '开始 3 天免费试用' : `剩余 ${billing.remaining} 次识别`}
-                          </h3>
-                          <p className="mt-3 text-sm leading-7 text-white/70">
-                            {billing.subscriptionStatus === 'inactive'
-                              ? '试用结束后 $9.90/月，每月 100 次 AI 图片分析额度。'
-                              : `当前状态：${billing.subscriptionStatus}，本周期已用 ${billing.usageCount}/${billing.monthlyLimit}`}
-                          </p>
-                        </div>
+                    {showHomeOffer && billing && (
+                      <div className="editorial-panel relative overflow-hidden bg-[linear-gradient(135deg,rgba(28,25,20,0.96),rgba(45,42,33,0.92))] p-6 text-white shadow-sm">
                         <button
                           onClick={() => {
-                            setShowBillingDrawer(true);
-                            void trackClientEvent('billing_cta_clicked', { location: 'home_card' });
+                            setDismissedHomePromo(true);
+                            if (typeof window !== 'undefined') {
+                              window.localStorage.setItem(HOME_PROMO_DISMISSED_KEY, '1');
+                            }
                           }}
-                          className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-black"
+                          className="absolute right-4 top-4 rounded-full border border-white/10 bg-white/5 p-2 text-white/70 transition hover:text-white"
                         >
-                          {billing.subscriptionStatus === 'inactive' ? '开始试用' : '查看订阅'}
+                          <X className="h-4 w-4" />
                         </button>
-                      </div>
+                        <div className="flex items-start justify-between gap-4 pr-10">
+                          <div>
+                            <p className="text-xs uppercase tracking-[0.2em] text-white/60">
+                              {billing.subscriptionStatus === 'free' ? 'Optional upgrade' : 'Snapshot Pro'}
+                            </p>
+                            <h3 className="editorial-serif mt-3 text-3xl font-semibold leading-tight">
+                              {billing.subscriptionStatus === 'free'
+                                ? `还剩 ${billing.remaining} 次免费识图`
+                                : `剩余 ${billing.remaining} 次识别`}
+                            </h3>
+                            <p className="mt-3 text-sm leading-7 text-white/70">
+                              {billing.subscriptionStatus === 'free'
+                                ? '先把免费额度用起来。之后如果你想继续扩容，再开启 3 天试用。'
+                                : `当前状态：${billing.subscriptionStatus}，本周期已用 ${billing.usageCount}/${billing.monthlyLimit}`}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => {
+                              setShowBillingDrawer(true);
+                              void trackClientEvent('billing_cta_clicked', { location: 'home_card' });
+                            }}
+                            className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-black"
+                          >
+                            {billing.subscriptionStatus === 'free' ? '了解 Pro' : '查看订阅'}
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1572,7 +1652,9 @@ export default function Home() {
                         <p className="editorial-caption">Membership</p>
                         <p className="editorial-serif mt-2 text-2xl font-semibold">会员与额度</p>
                         <p className="mt-2 text-sm leading-7 text-[var(--editorial-muted)]">
-                          状态：{billing.subscriptionStatus}，剩余 {billing.remaining}/{billing.monthlyLimit}
+                          {billing.subscriptionStatus === 'free'
+                            ? `当前是免费层，剩余 ${billing.remaining}/${billing.monthlyLimit} 次识图额度`
+                            : `状态：${billing.subscriptionStatus}，剩余 ${billing.remaining}/${billing.monthlyLimit}`}
                         </p>
                         {billing.trialEndsAt && (
                           <p className="mt-1 text-xs text-[var(--editorial-muted)]">
@@ -1587,7 +1669,7 @@ export default function Home() {
                         }}
                         className="rounded-full bg-[var(--editorial-ink)] px-4 py-2 text-xs font-semibold text-[var(--editorial-paper)]"
                       >
-                        {billing.subscriptionStatus === 'inactive' ? '升级' : '查看'}
+                        {billing.subscriptionStatus === 'free' ? '升级' : '查看'}
                       </button>
                     </div>
                   </div>

@@ -5,6 +5,7 @@ import { getStripe, getStripePriceId } from '@/lib/stripe';
 import { sendPaymentFailedEmail, sendTrialStartedEmail } from '@/lib/resend';
 
 const MONTHLY_ANALYZE_LIMIT = 100;
+const FREE_ANALYZE_LIMIT = 20;
 const ENTITLED_STATUSES = new Set(['trialing', 'active']);
 
 export interface BillingStatus {
@@ -172,6 +173,20 @@ export function buildBillingStatus(row: BillingStatusRow | null): BillingStatus 
   };
 }
 
+function buildFreeBillingStatus(usageCount: number): BillingStatus {
+  return {
+    subscriptionStatus: 'free',
+    hasAccess: usageCount < FREE_ANALYZE_LIMIT,
+    monthlyLimit: FREE_ANALYZE_LIMIT,
+    usageCount,
+    remaining: Math.max(FREE_ANALYZE_LIMIT - usageCount, 0),
+    trialEndsAt: null,
+    currentPeriodStart: null,
+    currentPeriodEnd: null,
+    cancelAtPeriodEnd: false,
+  };
+}
+
 export async function upsertSubscriptionFromStripe(subscription: Stripe.Subscription, client?: DbClient) {
   const activeClient = client ?? await getPool().connect() as DbClient;
 
@@ -281,7 +296,7 @@ export async function createTrialSubscription(user: AppUser) {
     await ensureBillingTables(client);
     const status = await getBillingStatus(user.id, client);
 
-    if (status.subscriptionStatus !== 'inactive') {
+    if (!['inactive', 'free'].includes(status.subscriptionStatus)) {
       throw new Error('An existing subscription already exists');
     }
 
@@ -352,6 +367,15 @@ export async function getBillingStatus(userId: number, client?: DbClient): Promi
       analyze_count: number | null;
     } | undefined) ?? null;
 
+    if (!row) {
+      const freeUsageResult = await activeClient.query(
+        'SELECT COUNT(*)::int AS usage_count FROM vocabulary_history WHERE user_id = $1',
+        [userId]
+      );
+      const usageCount = Number((freeUsageResult.rows[0] as { usage_count?: number } | undefined)?.usage_count ?? 0);
+      return buildFreeBillingStatus(usageCount);
+    }
+
     return buildBillingStatus(row);
   } finally {
     if (!client) {
@@ -366,6 +390,17 @@ export async function consumeAnalyzeCredit(userId: number) {
   try {
     await ensureBillingTables(client);
     const status = await getBillingStatus(userId, client);
+
+    if (status.subscriptionStatus === 'free') {
+      if (status.remaining <= 0) {
+        throw new Error('Free analyze limit reached');
+      }
+
+      return {
+        analyze_count: status.usageCount + 1,
+        monthly_limit: status.monthlyLimit,
+      };
+    }
 
     if (!ENTITLED_STATUSES.has(status.subscriptionStatus)) {
       throw new Error('Subscription required');
