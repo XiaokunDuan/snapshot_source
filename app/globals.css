@@ -20,7 +20,7 @@
   --color-wise-lime: var(--wise-lime);
   --color-wise-dark-bg: var(--wise-dark-bg);
   --color-wise-card-dark: var(--wise-card-dark);
-  --font-sans: "Inter", "Avenir Next", "Segoe UI", sans-serif;
+  --font-sans: var(--font-inter), "Avenir Next", "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", "SFMono-Regular", monospace;
 }
 
@@ -39,7 +39,7 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: "Inter", "Avenir Next", "Segoe UI", sans-serif;
+  font-family: var(--font-inter), "Avenir Next", "Segoe UI", sans-serif;
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
@@ -48,7 +48,7 @@ h2,
 h3,
 h4,
 .editorial-serif {
-  font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  font-family: var(--font-editorial-serif), "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
   letter-spacing: -0.04em;
 }
 
@@ -103,6 +103,18 @@ h4,
 .editorial-accent-pill {
   background: var(--editorial-accent);
   color: #111;
+}
+
+.editorial-language-tab {
+  border: 1px solid var(--editorial-border);
+  background: color-mix(in srgb, var(--editorial-panel) 80%, transparent);
+  color: var(--editorial-muted);
+}
+
+.editorial-language-tab[data-active="true"] {
+  background: var(--editorial-accent);
+  color: #111;
+  border-color: color-mix(in srgb, var(--editorial-accent) 70%, black 10%);
 }
 
 .dark input,

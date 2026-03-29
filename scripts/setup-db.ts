@@ -106,6 +106,11 @@ async function setupDatabase() {
         sentence TEXT,
         sentence_cn TEXT,
         image_url TEXT,
+        source_object TEXT,
+        source_label_en TEXT,
+        primary_language VARCHAR(10),
+        target_languages JSONB DEFAULT '[]'::jsonb,
+        variants_json JSONB DEFAULT '{}'::jsonb,
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
@@ -113,6 +118,31 @@ async function setupDatabase() {
     await client.query(`
       ALTER TABLE vocabulary_history
       ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE CASCADE;
+    `);
+
+    await client.query(`
+      ALTER TABLE vocabulary_history
+      ADD COLUMN IF NOT EXISTS source_object TEXT;
+    `);
+
+    await client.query(`
+      ALTER TABLE vocabulary_history
+      ADD COLUMN IF NOT EXISTS source_label_en TEXT;
+    `);
+
+    await client.query(`
+      ALTER TABLE vocabulary_history
+      ADD COLUMN IF NOT EXISTS primary_language VARCHAR(10);
+    `);
+
+    await client.query(`
+      ALTER TABLE vocabulary_history
+      ADD COLUMN IF NOT EXISTS target_languages JSONB DEFAULT '[]'::jsonb;
+    `);
+
+    await client.query(`
+      ALTER TABLE vocabulary_history
+      ADD COLUMN IF NOT EXISTS variants_json JSONB DEFAULT '{}'::jsonb;
     `);
 
     await client.query(`

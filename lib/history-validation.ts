@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { SUPPORTED_LANGUAGE_CODES } from '@/lib/language-content';
 
 export const historyCreateSchema = z.object({
   word: z.string().trim().min(1).max(100),
@@ -7,6 +8,11 @@ export const historyCreateSchema = z.object({
   sentence: z.string().trim().max(2000).optional().or(z.literal('')),
   sentence_cn: z.string().trim().max(2000).optional().or(z.literal('')),
   imageUrl: z.string().trim().max(10000).optional().or(z.literal('')),
+  sourceObject: z.string().trim().max(200).optional().or(z.literal('')),
+  sourceLabelEn: z.string().trim().max(200).optional().or(z.literal('')),
+  primaryLanguage: z.enum(SUPPORTED_LANGUAGE_CODES).optional(),
+  targetLanguages: z.array(z.enum(SUPPORTED_LANGUAGE_CODES)).max(5).optional(),
+  variantsJson: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const historyUpdateSchema = historyCreateSchema.extend({

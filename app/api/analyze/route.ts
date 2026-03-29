@@ -7,12 +7,16 @@ import { enforceRateLimit } from '@/lib/rate-limit';
 import { consumeAnalyzeCredit, getBillingStatus } from '@/lib/billing';
 import { requireDbUser } from '@/lib/users';
 import { trackServerEvent } from '@/lib/analytics';
+import { buildFallbackVariants, normalizeLanguageCode, type AnalyzeVariants, type LanguageCode } from '@/lib/language-content';
+import { generateLanguageVariants } from '@/lib/text-generation';
 
 const analyzeSchema = z.object({
     imageUrl: z.string().min(1, 'imageUrl is required'),
 });
 
 interface WordResult {
+    sourceObject: string;
+    sourceLabelEn: string;
     word: string;
     phonetic: string;
     meaning: string;
@@ -66,10 +70,12 @@ export async function POST(req: NextRequest) {
         const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
         // 系统提示词
-        const systemPrompt = `你是一个专业的英语老师。用户会发给你一张图片。请识别图片中的核心物体，返回一个对应的英文单词、音标、中文释义，以及一个简短的英文例句（带中文翻译）。
+        const systemPrompt = `你是一个专业的视觉语言识别助手。用户会发给你一张图片。请先识别图片中的核心物体或主题，再给出一个最适合作为学习锚点的英文词条。
 
 你必须返回以下 JSON 格式，不要包含任何其他文字：
 {
+  "sourceObject": "对该物体/主题的中文或通用描述",
+  "sourceLabelEn": "该物体/主题的英文标签",
   "word": "英文单词",
   "phonetic": "/音标/",
   "meaning": "中文释义",
@@ -143,7 +149,8 @@ export async function POST(req: NextRequest) {
         // 解析 JSON 响应
         let result: WordResult;
         try {
-            result = JSON.parse(generatedText);
+            const parsedResult = JSON.parse(generatedText);
+            result = Array.isArray(parsedResult) ? parsedResult[0] : parsedResult;
         } catch {
             console.error('[Analyze] Failed to parse JSON:', generatedText);
             return NextResponse.json(
@@ -163,6 +170,30 @@ export async function POST(req: NextRequest) {
         console.log(`[Analyze] Successfully analyzed: ${result.word}`);
         await consumeAnalyzeCredit(user.id);
 
+        let languagePack: AnalyzeVariants;
+        try {
+            languagePack = await generateLanguageVariants({
+                sourceObject: result.sourceObject,
+                sourceLabelEn: result.sourceLabelEn,
+                word: result.word,
+                phonetic: result.phonetic,
+                meaning: result.meaning,
+                sentence: result.sentence,
+                sentenceCn: result.sentence_cn,
+            });
+        } catch (languageError) {
+            console.error('[Analyze] Language generation fallback:', languageError);
+            languagePack = buildFallbackVariants({
+                sourceObject: result.sourceObject,
+                sourceLabelEn: result.sourceLabelEn,
+                word: result.word,
+                phonetic: result.phonetic,
+                meaning: result.meaning,
+                sentence: result.sentence,
+                sentenceCn: result.sentence_cn,
+            });
+        }
+
         // 使用 MCP 获取富化数据
         const enrichedData = await getEnrichedWordData(result.word);
         await trackServerEvent('analyze_succeeded', {
@@ -173,6 +204,11 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({
             success: true,
             ...result,
+            sourceObject: languagePack.sourceObject,
+            sourceLabelEn: languagePack.sourceLabelEn,
+            primaryLanguage: normalizeLanguageCode('en') satisfies LanguageCode,
+            availableLanguages: languagePack.availableLanguages,
+            variants: languagePack.variants,
             mcp: enrichedData
         });
 
@@ -193,7 +229,7 @@ export async function POST(req: NextRequest) {
 }
 
 function validateWordResult(result: Partial<WordResult>) {
-    const requiredFields: (keyof WordResult)[] = ['word', 'phonetic', 'meaning', 'sentence', 'sentence_cn'];
+    const requiredFields: (keyof WordResult)[] = ['sourceObject', 'sourceLabelEn', 'word', 'phonetic', 'meaning', 'sentence', 'sentence_cn'];
 
     for (const field of requiredFields) {
         const value = result[field];

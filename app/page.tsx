@@ -20,13 +20,19 @@ import { BillingDrawer } from './components/BillingDrawer';
 import { InstallAppPrompt } from './components/InstallAppPrompt';
 import { trackClientEvent } from '@/lib/analytics-client';
 import { LocaleToggle, useMessages } from '@/app/components/LocaleProvider';
+import { DEFAULT_LANGUAGE, LANGUAGE_LABELS, normalizeLanguageCode, normalizeVariants, SUPPORTED_LANGUAGE_CODES, type LanguageCode, type LanguageVariant } from '@/lib/language-content';
 
 interface WordResult {
+  sourceObject: string;
+  sourceLabelEn: string;
   word: string;
   phonetic: string;
   meaning: string;
   sentence: string;
   sentence_cn: string;
+  availableLanguages: LanguageCode[];
+  primaryLanguage: LanguageCode;
+  variants: Record<LanguageCode, LanguageVariant>;
 }
 
 interface HistoryItem extends WordResult {
@@ -43,6 +49,11 @@ interface HistoryApiItem {
   sentence: string | null;
   sentence_cn: string | null;
   image_url: string | null;
+  source_object: string | null;
+  source_label_en: string | null;
+  primary_language: string | null;
+  target_languages: string[] | null;
+  variants_json: unknown;
   created_at: string;
 }
 
@@ -59,12 +70,40 @@ interface BillingStatus {
 }
 
 const HISTORY_CACHE_KEY = 'vocabulary_history';
+const PRIMARY_LANGUAGE_KEY = 'snapshot_primary_language';
 
 function persistHistoryCache(items: HistoryItem[]) {
   localStorage.setItem(HISTORY_CACHE_KEY, JSON.stringify(items));
 }
 
+function getStoredPrimaryLanguage() {
+  if (typeof window === 'undefined') {
+    return DEFAULT_LANGUAGE;
+  }
+
+  return normalizeLanguageCode(window.localStorage.getItem(PRIMARY_LANGUAGE_KEY) ?? window.navigator.language);
+}
+
 function normalizeHistoryItem(item: HistoryApiItem): HistoryItem {
+  const primaryLanguage = normalizeLanguageCode(item.primary_language);
+  const fallbackVariants = {
+    'zh-CN': {
+      term: item.source_object || item.word,
+      meaning: item.meaning,
+      phonetic: item.phonetic || '',
+      example: item.sentence_cn || item.sentence || '',
+      exampleTranslation: item.sentence || '',
+    },
+    en: {
+      term: item.word,
+      meaning: item.meaning,
+      phonetic: item.phonetic || '',
+      example: item.sentence || '',
+      exampleTranslation: item.sentence_cn || '',
+    },
+  };
+  const variants = normalizeVariants(item.variants_json, fallbackVariants);
+
   return {
     id: item.id,
     word: item.word,
@@ -72,6 +111,13 @@ function normalizeHistoryItem(item: HistoryApiItem): HistoryItem {
     meaning: item.meaning,
     sentence: item.sentence || '',
     sentence_cn: item.sentence_cn || '',
+    sourceObject: item.source_object || item.word,
+    sourceLabelEn: item.source_label_en || item.word,
+    primaryLanguage,
+    availableLanguages: SUPPORTED_LANGUAGE_CODES.filter((language) =>
+      item.target_languages?.includes(language) || variants[language].term || variants[language].meaning
+    ),
+    variants,
     imageUrl: item.image_url || '',
     timestamp: new Date(item.created_at).getTime(),
   };
@@ -104,7 +150,7 @@ function isWordResult(value: unknown): value is WordResult {
   }
 
   const candidate = value as Record<string, unknown>;
-  const requiredFields: (keyof WordResult)[] = ['word', 'phonetic', 'meaning', 'sentence', 'sentence_cn'];
+  const requiredFields: (keyof WordResult)[] = ['sourceObject', 'sourceLabelEn', 'word', 'phonetic', 'meaning', 'sentence', 'sentence_cn'];
   return requiredFields.every((field) => typeof candidate[field] === 'string' && candidate[field]!.toString().trim().length > 0);
 }
 
@@ -130,6 +176,7 @@ export default function Home() {
   const [showBillingDrawer, setShowBillingDrawer] = useState(false);
   const [todayStudied, setTodayStudied] = useState(0);
   const [dailyGoal] = useState(10);
+  const [preferredLanguage, setPreferredLanguage] = useState<LanguageCode>(DEFAULT_LANGUAGE);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [editingItem, setEditingItem] = useState<HistoryItem | null>(null);
@@ -189,18 +236,39 @@ export default function Home() {
   };
 
   const saveEdit = async (updatedItem: HistoryItem) => {
+    const activeLanguage = updatedItem.primaryLanguage || preferredLanguage;
+    const nextVariants = {
+      ...updatedItem.variants,
+      [activeLanguage]: {
+        ...updatedItem.variants[activeLanguage],
+        term: updatedItem.word,
+        phonetic: updatedItem.phonetic,
+        meaning: updatedItem.meaning,
+        example: updatedItem.sentence,
+        exampleTranslation: updatedItem.sentence_cn,
+      },
+    };
+    const mergedItem = {
+      ...updatedItem,
+      variants: nextVariants,
+    };
+
     // Optimistic update
-    const newHistory = history.map(h => h.timestamp === updatedItem.timestamp ? updatedItem : h);
+    const newHistory = history.map(h => h.timestamp === updatedItem.timestamp ? mergedItem : h);
     setHistory(newHistory);
     persistHistoryCache(newHistory);
     setEditingItem(null);
 
-    if (updatedItem.id) {
+    if (mergedItem.id) {
       try {
         await fetch('/api/history', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updatedItem),
+          body: JSON.stringify({
+            ...mergedItem,
+            primaryLanguage: activeLanguage,
+            variantsJson: nextVariants,
+          }),
         });
       } catch (err) {
         console.error('Failed to update DB:', err);
@@ -313,7 +381,15 @@ export default function Home() {
         defineCustomElements(window);
       });
     }
+
+    setPreferredLanguage(getStoredPrimaryLanguage());
   }, []);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(PRIMARY_LANGUAGE_KEY, preferredLanguage);
+    }
+  }, [preferredLanguage]);
 
   if (!isLoaded || showSplash) {
     return <SplashScreen onFinish={() => setShowSplash(false)} />;
@@ -528,14 +604,37 @@ export default function Home() {
       }
 
       const wordResult: WordResult = {
+        sourceObject: analyzeData.sourceObject,
+        sourceLabelEn: analyzeData.sourceLabelEn,
         word: analyzeData.word,
         phonetic: analyzeData.phonetic,
         meaning: analyzeData.meaning,
         sentence: analyzeData.sentence,
         sentence_cn: analyzeData.sentence_cn,
+        availableLanguages: Array.isArray(analyzeData.availableLanguages)
+          ? analyzeData.availableLanguages.filter((language: unknown): language is LanguageCode => typeof language === 'string')
+          : [...SUPPORTED_LANGUAGE_CODES],
+        primaryLanguage: normalizeLanguageCode(analyzeData.primaryLanguage),
+        variants: normalizeVariants(analyzeData.variants, {
+          'zh-CN': {
+            term: analyzeData.sourceObject || analyzeData.word,
+            meaning: analyzeData.meaning,
+            phonetic: analyzeData.phonetic,
+            example: analyzeData.sentence_cn || analyzeData.sentence,
+            exampleTranslation: analyzeData.sentence,
+          },
+          en: {
+            term: analyzeData.word,
+            meaning: analyzeData.meaning,
+            phonetic: analyzeData.phonetic,
+            example: analyzeData.sentence,
+            exampleTranslation: analyzeData.sentence_cn,
+          },
+        }),
       };
 
       setResult(wordResult);
+      setPreferredLanguage(normalizeLanguageCode(wordResult.primaryLanguage));
       setIsAnalyzing(false);
 
       // Trigger check-in
@@ -623,7 +722,12 @@ export default function Home() {
           meaning: wordResult.meaning,
           sentence: wordResult.sentence,
           sentence_cn: wordResult.sentence_cn,
-          imageUrl: base64Image
+          imageUrl: base64Image,
+          sourceObject: wordResult.sourceObject,
+          sourceLabelEn: wordResult.sourceLabelEn,
+          primaryLanguage: preferredLanguage,
+          targetLanguages: wordResult.availableLanguages,
+          variantsJson: wordResult.variants,
         })
       })
         .then(async res => {
@@ -698,6 +802,11 @@ export default function Home() {
       return h.timestamp >= weekAgo;
     }).length
   };
+  const activeVariant = result ? result.variants[preferredLanguage] ?? result.variants[result.primaryLanguage] : null;
+  const filteredHistory = history.filter((item) => {
+    const variant = item.variants[preferredLanguage];
+    return Boolean(variant?.term || variant?.meaning);
+  });
   const currentLocale = typeof navigator !== 'undefined' && navigator.language.toLowerCase().startsWith('en')
     ? 'en-US'
     : 'zh-CN';
@@ -976,31 +1085,88 @@ export default function Home() {
                   <div className="editorial-panel p-8">
                     <div className="space-y-6">
                       <div>
-                        <p className="editorial-caption">Fresh extraction</p>
-                        <h2 className="editorial-serif mb-3 mt-3 text-5xl font-semibold tracking-[-0.04em] sm:text-6xl">
-                          {result.word}
+                        <p className="editorial-caption">Detected object</p>
+                        <h2 className="editorial-serif mt-3 text-4xl font-semibold tracking-[-0.04em] sm:text-5xl">
+                          {result.sourceObject}
                         </h2>
-                        <p className="font-mono text-xl text-[var(--editorial-accent)]">
-                          {result.phonetic}
+                        <p className="mt-2 text-sm uppercase tracking-[0.22em] text-[var(--editorial-muted)]">
+                          {result.sourceLabelEn}
                         </p>
                       </div>
 
-                      <div className="inline-block rounded-full bg-[var(--editorial-accent)] px-6 py-3">
-                        <p className="text-lg font-medium text-white">
-                          {result.meaning}
-                        </p>
+                      <div className="flex flex-wrap gap-2">
+                        {SUPPORTED_LANGUAGE_CODES.map((language) => (
+                          <button
+                            key={language}
+                            onClick={() => setPreferredLanguage(language)}
+                            data-active={preferredLanguage === language}
+                            className="editorial-language-tab rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition-colors"
+                          >
+                            {LANGUAGE_LABELS[language]}
+                          </button>
+                        ))}
                       </div>
+
+                      {activeVariant && (
+                        <>
+                          <div>
+                            <h3 className="editorial-serif mb-3 text-5xl font-semibold tracking-[-0.04em] sm:text-6xl">
+                              {activeVariant.term || result.word}
+                            </h3>
+                            <p className="font-mono text-xl text-[var(--editorial-accent)]">
+                              {activeVariant.phonetic || result.phonetic}
+                            </p>
+                          </div>
+
+                          <div className="inline-block rounded-full bg-[var(--editorial-accent)] px-6 py-3">
+                            <p className="text-lg font-medium text-black">
+                              {activeVariant.meaning || result.meaning}
+                            </p>
+                          </div>
+
+                          <div className="grid gap-4 md:grid-cols-2">
+                            <div className="rounded-[1.75rem] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.72)] p-6">
+                              <p className="editorial-caption">Example</p>
+                              <p className="mt-3 text-base italic text-[var(--editorial-ink)]">
+                                &quot;{activeVariant.example || result.sentence}&quot;
+                              </p>
+                              <p className="mt-3 text-sm leading-7 text-[var(--editorial-muted)]">
+                                {activeVariant.exampleTranslation || result.sentence_cn}
+                              </p>
+                            </div>
+                            <div className="rounded-[1.75rem] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.72)] p-6">
+                              <p className="editorial-caption">Pronunciation & usage</p>
+                              <p className="mt-3 text-sm leading-7 text-[var(--editorial-ink)]">
+                                {activeVariant.pronunciationTip}
+                              </p>
+                              <p className="mt-3 text-sm leading-7 text-[var(--editorial-muted)]">
+                                {activeVariant.grammarNote}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="grid gap-4 md:grid-cols-[0.75fr_1.25fr]">
+                            <div className="rounded-[1.75rem] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.72)] p-6">
+                              <p className="editorial-caption">Related forms</p>
+                              <div className="mt-4 flex flex-wrap gap-2">
+                                {(activeVariant.relatedForms.length > 0 ? activeVariant.relatedForms : [activeVariant.term || result.word]).map((form) => (
+                                  <span key={form} className="rounded-full border border-[var(--editorial-border)] px-3 py-2 text-xs uppercase tracking-[0.16em] text-[var(--editorial-muted)]">
+                                    {form}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="rounded-[1.75rem] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.72)] p-6">
+                              <p className="editorial-caption">Culture note</p>
+                              <p className="mt-3 text-sm leading-7 text-[var(--editorial-muted)]">
+                                {activeVariant.cultureNote}
+                              </p>
+                            </div>
+                          </div>
+                        </>
+                      )}
 
                       <div className="h-px w-full bg-[var(--editorial-border)]" />
-
-                      <div className="rounded-[1.75rem] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.72)] p-6">
-                        <p className="text-base italic text-[var(--editorial-ink)]">
-                          &quot;{result.sentence}&quot;
-                        </p>
-                        <p className="mt-3 text-sm leading-7 text-[var(--editorial-muted)]">
-                          {result.sentence_cn}
-                        </p>
-                      </div>
                       <button
                         onClick={() => {
                           setCurrentImage(null);
@@ -1117,14 +1283,28 @@ export default function Home() {
           {activeTab === 'history' && (
             <PageTransition key="history" className="space-y-6">
               <div className="editorial-panel p-6 sm:p-8">
-                <p className="editorial-kicker">Archive</p>
-                <h2 className="editorial-serif mt-4 text-4xl font-semibold tracking-[-0.04em] sm:text-5xl">学习记录</h2>
-                <p className="mt-3 text-sm text-[var(--editorial-muted)]">{history.length} 个单词，按图像与日期归档。</p>
+                <p className="editorial-kicker">Language archive</p>
+                <h2 className="editorial-serif mt-4 text-4xl font-semibold tracking-[-0.04em] sm:text-5xl">{LANGUAGE_LABELS[preferredLanguage]} 语言库</h2>
+                <p className="mt-3 text-sm text-[var(--editorial-muted)]">{filteredHistory.length} 条记录，按图像、语言和日期归档。</p>
+                <div className="mt-5 flex flex-wrap gap-2">
+                  {SUPPORTED_LANGUAGE_CODES.map((language) => (
+                    <button
+                      key={language}
+                      onClick={() => setPreferredLanguage(language)}
+                      data-active={preferredLanguage === language}
+                      className="editorial-language-tab rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em]"
+                    >
+                      {LANGUAGE_LABELS[language]}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              {history.length > 0 ? (
+              {filteredHistory.length > 0 ? (
                 <div className="grid gap-4 md:grid-cols-2">
-                  {history.map((item) => (
+                  {filteredHistory.map((item) => {
+                    const variant = item.variants[preferredLanguage] ?? item.variants[item.primaryLanguage];
+                    return (
                     <div
                       key={item.id || item.timestamp}
                       className="editorial-panel group relative overflow-hidden p-3 transition-all duration-300 hover:-translate-y-0.5"
@@ -1145,11 +1325,12 @@ export default function Home() {
                             onClick={() => {
                               setActiveTab('home');
                               setCurrentImage(item.imageUrl);
+                              setPreferredLanguage(item.primaryLanguage || preferredLanguage);
                               setResult(item);
                             }}
                             className="editorial-serif mr-2 cursor-pointer truncate text-2xl font-semibold"
                           >
-                            {item.word}
+                            {variant.term || item.word}
                           </p>
                           <div className="flex gap-2">
                             <button
@@ -1172,13 +1353,18 @@ export default function Home() {
                             </button>
                           </div>
                         </div>
-                        <p className="line-clamp-1 text-sm text-[var(--editorial-muted)]">{item.meaning}</p>
+                        <p className="line-clamp-1 text-sm text-[var(--editorial-muted)]">{variant.meaning || item.meaning}</p>
+                        <div className="mt-3 flex items-center justify-between">
+                          <span className="rounded-full border border-[var(--editorial-border)] px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-[var(--editorial-muted)]">
+                            {LANGUAGE_LABELS[preferredLanguage]}
+                          </span>
                         <p className="mt-3 text-xs uppercase tracking-[0.2em] text-[var(--editorial-muted)]">
                           {new Date(item.timestamp).toLocaleDateString('zh-CN')}
                         </p>
+                        </div>
                       </div>
                     </div>
-                  ))}
+                  )})}
                 </div>
               ) : (
                 <div className="editorial-panel p-12 text-center transition-colors duration-300">
@@ -1188,7 +1374,7 @@ export default function Home() {
                     className="w-48 h-48 mx-auto mb-6 opacity-80 image-soften"
                   />
                   <p className="text-[var(--editorial-muted)]">还没有学习记录</p>
-                  <p className="mt-2 text-sm text-[var(--editorial-muted)]">从首页上传一张图，先建立第一条档案。</p>
+                  <p className="mt-2 text-sm text-[var(--editorial-muted)]">从首页上传一张图，先建立第一条 {LANGUAGE_LABELS[preferredLanguage]} 档案。</p>
                 </div>
               )}
             </PageTransition>
@@ -1357,7 +1543,26 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="space-y-3">
+                <div className="space-y-3">
+                  <div className="editorial-panel p-5">
+                    <p className="editorial-caption">Primary study language</p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {SUPPORTED_LANGUAGE_CODES.map((language) => (
+                        <button
+                          key={language}
+                          onClick={() => setPreferredLanguage(language)}
+                          data-active={preferredLanguage === language}
+                          className="editorial-language-tab rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em]"
+                        >
+                          {LANGUAGE_LABELS[language]}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="mt-3 text-sm leading-7 text-[var(--editorial-muted)]">
+                      识图结果、历史语言库和默认保存语言都会优先跟随这个设置。更多语言，敬请期待。
+                    </p>
+                  </div>
+
                 {/* Learning Reminder Removed */}
 
                 {billing && (

@@ -9,6 +9,11 @@ export interface HistoryRecord {
   sentence: string | null;
   sentence_cn: string | null;
   image_url: string | null;
+  source_object: string | null;
+  source_label_en: string | null;
+  primary_language: string | null;
+  target_languages: string[] | null;
+  variants_json: unknown;
   created_at: string;
 }
 
@@ -43,6 +48,11 @@ async function ensureHistoryTable(client: HistoryClient) {
       sentence TEXT,
       sentence_cn TEXT,
       image_url TEXT,
+      source_object TEXT,
+      source_label_en TEXT,
+      primary_language VARCHAR(10),
+      target_languages JSONB DEFAULT '[]'::jsonb,
+      variants_json JSONB DEFAULT '{}'::jsonb,
       created_at TIMESTAMP DEFAULT NOW()
     )
   `);
@@ -50,6 +60,31 @@ async function ensureHistoryTable(client: HistoryClient) {
   await client.query(`
     ALTER TABLE vocabulary_history
     ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE CASCADE
+  `);
+
+  await client.query(`
+    ALTER TABLE vocabulary_history
+    ADD COLUMN IF NOT EXISTS source_object TEXT
+  `);
+
+  await client.query(`
+    ALTER TABLE vocabulary_history
+    ADD COLUMN IF NOT EXISTS source_label_en TEXT
+  `);
+
+  await client.query(`
+    ALTER TABLE vocabulary_history
+    ADD COLUMN IF NOT EXISTS primary_language VARCHAR(10)
+  `);
+
+  await client.query(`
+    ALTER TABLE vocabulary_history
+    ADD COLUMN IF NOT EXISTS target_languages JSONB DEFAULT '[]'::jsonb
+  `);
+
+  await client.query(`
+    ALTER TABLE vocabulary_history
+    ADD COLUMN IF NOT EXISTS variants_json JSONB DEFAULT '{}'::jsonb
   `);
 
   await client.query(`
@@ -103,6 +138,11 @@ export async function createHistoryRecord(
     sentence?: string;
     sentence_cn?: string;
     imageUrl?: string;
+    sourceObject?: string;
+    sourceLabelEn?: string;
+    primaryLanguage?: string;
+    targetLanguages?: string[];
+    variantsJson?: unknown;
   }
 ): Promise<HistoryRecord> {
   const client = await getPool().connect() as HistoryClient;
@@ -111,8 +151,8 @@ export async function createHistoryRecord(
     await ensureHistoryTable(client);
     const result = await client.query(
       `INSERT INTO vocabulary_history
-      (user_id, word, phonetic, meaning, sentence, sentence_cn, image_url)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      (user_id, word, phonetic, meaning, sentence, sentence_cn, image_url, source_object, source_label_en, primary_language, target_languages, variants_json)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb)
       RETURNING *`,
       [
         userId,
@@ -122,6 +162,11 @@ export async function createHistoryRecord(
         input.sentence || '',
         input.sentence_cn || '',
         input.imageUrl || '',
+        input.sourceObject || '',
+        input.sourceLabelEn || '',
+        input.primaryLanguage || '',
+        JSON.stringify(input.targetLanguages || []),
+        JSON.stringify(input.variantsJson || {}),
       ]
     );
 
@@ -154,6 +199,8 @@ export async function updateHistoryRecord(
     meaning: string;
     sentence?: string;
     sentence_cn?: string;
+    primaryLanguage?: string;
+    variantsJson?: unknown;
   }
 ): Promise<HistoryRecord | null> {
   const client = await getPool().connect() as HistoryClient;
@@ -167,8 +214,13 @@ export async function updateHistoryRecord(
          phonetic = $2,
          meaning = $3,
          sentence = $4,
-         sentence_cn = $5
-       WHERE id = $6 AND user_id = $7
+         sentence_cn = $5,
+         primary_language = COALESCE(NULLIF($6, ''), primary_language),
+         variants_json = CASE
+           WHEN $7::jsonb = '{}'::jsonb THEN variants_json
+           ELSE $7::jsonb
+         END
+       WHERE id = $8 AND user_id = $9
        RETURNING *`,
       [
         input.word,
@@ -176,6 +228,8 @@ export async function updateHistoryRecord(
         input.meaning,
         input.sentence || '',
         input.sentence_cn || '',
+        input.primaryLanguage || '',
+        JSON.stringify(input.variantsJson || {}),
         input.id,
         userId,
       ]

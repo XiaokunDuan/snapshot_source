@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        const { word, phonetic, meaning, sentence, sentence_cn, imageUrl } = parsed.data;
+        const { word, phonetic, meaning, sentence, sentence_cn, imageUrl, sourceObject, sourceLabelEn, primaryLanguage, targetLanguages, variantsJson } = parsed.data;
         const result = await createHistoryRecord(user.dbUserId, {
             word,
             phonetic,
@@ -71,6 +71,11 @@ export async function POST(req: NextRequest) {
             sentence,
             sentence_cn,
             imageUrl,
+            sourceObject,
+            sourceLabelEn,
+            primaryLanguage,
+            targetLanguages,
+            variantsJson,
         });
 
         console.log('[History] Saved word:', word);
@@ -137,7 +142,7 @@ export async function PUT(req: NextRequest) {
             );
         }
 
-        const { id, word, phonetic, meaning, sentence, sentence_cn } = parsed.data;
+        const { id, word, phonetic, meaning, sentence, sentence_cn, primaryLanguage, variantsJson } = parsed.data;
         const result = await updateHistoryRecord(user.dbUserId, {
             id,
             word,
@@ -145,6 +150,8 @@ export async function PUT(req: NextRequest) {
             meaning,
             sentence,
             sentence_cn,
+            primaryLanguage,
+            variantsJson,
         });
 
         console.log('[History] Updated word:', id);
