@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Download, Share2, Smartphone, X } from 'lucide-react';
 import { useMessages } from '@/app/components/LocaleProvider';
 
-const DISMISS_KEY = 'snapshot_install_prompt_dismissed';
+const DISMISS_KEY = 'snapshot_install_prompt_dismissed_session';
 
 type DeferredInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -41,7 +41,7 @@ export function InstallAppPrompt({ enabled }: { enabled: boolean }) {
       return false;
     }
 
-    return !window.localStorage.getItem(DISMISS_KEY);
+    return !window.sessionStorage.getItem(DISMISS_KEY);
   }, [enabled]);
 
   useEffect(() => {
@@ -74,7 +74,7 @@ export function InstallAppPrompt({ enabled }: { enabled: boolean }) {
 
   const dismiss = () => {
     if (typeof window !== 'undefined') {
-      window.localStorage.setItem(DISMISS_KEY, '1');
+      window.sessionStorage.setItem(DISMISS_KEY, '1');
     }
     setOpen(false);
   };

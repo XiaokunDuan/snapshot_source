@@ -1851,11 +1851,7 @@ export default function Home() {
 
               <div className="space-y-4">
                 <div className="editorial-panel relative overflow-hidden p-8 transition-colors duration-300">
-                  <img
-                    src="/progress.png"
-                    alt="Progress"
-                    className="absolute right-0 top-0 w-40 h-40 opacity-30 image-soften"
-                  />
+                  <div className="pointer-events-none absolute right-4 top-4 h-28 w-32 rounded-[2rem] bg-[radial-gradient(circle_at_top,rgba(149,199,85,0.22),transparent_60%),radial-gradient(circle_at_70%_60%,rgba(118,197,214,0.18),transparent_55%)] blur-xl" />
                   <div className="text-center relative z-10">
                     <div className="editorial-caption">{locale === 'en' ? 'Archive volume' : '累计档案'}</div>
                     <div className="mt-3 text-6xl font-semibold text-[var(--editorial-accent)]">{stats.total}</div>
