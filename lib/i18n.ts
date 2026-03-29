@@ -48,6 +48,8 @@ type Messages = {
     subtitle: string;
     iosHint: string;
     iosSteps: string;
+    androidHint: string;
+    androidSteps: string;
     action: string;
     later: string;
   };
@@ -104,6 +106,8 @@ export const messages: Record<Locale, Messages> = {
       subtitle: '把 Snapshot 放到手机主屏幕，下次就像原生 App 一样直接打开。',
       iosHint: 'iPhone / iPad 安装方式',
       iosSteps: '点击 Safari 分享按钮，再选择“添加到主屏幕”。',
+      androidHint: '安卓安装方式',
+      androidSteps: '如果浏览器没有直接弹出安装框，请打开右上角菜单，选择“安装应用”或“添加到主屏幕”。',
       action: '安装到手机',
       later: '稍后再说',
     },
@@ -156,6 +160,8 @@ export const messages: Record<Locale, Messages> = {
       subtitle: 'Keep Snapshot on your home screen and open it like a native app next time.',
       iosHint: 'How to install on iPhone / iPad',
       iosSteps: 'Tap the Safari share button, then choose “Add to Home Screen”.',
+      androidHint: 'How to install on Android',
+      androidSteps: 'If the browser does not show an install sheet automatically, open the browser menu and choose “Install app” or “Add to Home screen”.',
       action: 'Install now',
       later: 'Maybe later',
     },

@@ -56,11 +56,6 @@ export function InstallAppPrompt({ enabled }: { enabled: boolean }) {
       return;
     }
 
-    if (isIosMobile) {
-      const timer = window.setTimeout(() => setOpen(true), 1400);
-      return () => window.clearTimeout(timer);
-    }
-
     const handleBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
       setDeferredPrompt(event as DeferredInstallPromptEvent);
@@ -68,7 +63,11 @@ export function InstallAppPrompt({ enabled }: { enabled: boolean }) {
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    const timer = window.setTimeout(() => setOpen(true), 1400);
+
     return () => {
+      window.clearTimeout(timer);
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     };
   }, [canShow, isIosMobile]);
@@ -125,7 +124,17 @@ export function InstallAppPrompt({ enabled }: { enabled: boolean }) {
             </div>
             <p className="mt-2 text-sm leading-7 text-[var(--editorial-muted)]">{copy.install.iosSteps}</p>
           </div>
-        ) : null}
+        ) : (
+          <div className="mt-5 rounded-[1.5rem] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.72)] p-4">
+            <div className="flex items-center gap-2 text-sm font-medium text-[var(--editorial-ink)]">
+              <Smartphone className="h-4 w-4 text-[var(--editorial-accent)]" />
+              {copy.install.androidHint}
+            </div>
+            <p className="mt-2 text-sm leading-7 text-[var(--editorial-muted)]">
+              {deferredPrompt ? copy.install.subtitle : copy.install.androidSteps}
+            </p>
+          </div>
+        )}
 
         <div className="mt-6 flex gap-3">
           <button

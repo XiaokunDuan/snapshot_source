@@ -23,8 +23,12 @@ interface WordResult {
 }
 
 export async function POST(req: NextRequest) {
+    let userId: number | null = null;
+    let requestImageKind: 'data-url' | 'remote-url' | 'unknown' = 'unknown';
+    let requestMimeType = 'unknown';
     try {
         const user = await requireDbUser();
+        userId = user.id;
         const identifier = `user:${user.id}`;
         const rateLimit = await enforceRateLimit({
             identifier,
@@ -64,6 +68,7 @@ export async function POST(req: NextRequest) {
         }
 
         const { imageUrl } = parsed.data;
+        requestImageKind = imageUrl.startsWith('data:') ? 'data-url' : 'remote-url';
 
         // 构建 Gemini API 请求
         const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
@@ -104,6 +109,7 @@ export async function POST(req: NextRequest) {
             imageData = fetchedImage.data;
             mimeType = fetchedImage.mimeType;
         }
+        requestMimeType = mimeType;
 
         const requestBody = {
             contents: [
@@ -197,7 +203,21 @@ export async function POST(req: NextRequest) {
 
     } catch (error) {
         console.error('[Analyze] Error:', error);
-        Sentry.captureException(error);
+        Sentry.withScope((scope) => {
+            scope.setTag('route', '/api/analyze');
+            scope.setTag('image_kind', requestImageKind);
+            scope.setTag('mime_type', requestMimeType);
+            if (userId) {
+                scope.setUser({ id: String(userId) });
+            }
+            scope.setContext('analyze_request', {
+                imageKind: requestImageKind,
+                mimeType: requestMimeType,
+                userId,
+                model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+            });
+            Sentry.captureException(error);
+        });
         await trackServerEvent('analyze_failed', {
             message: error instanceof Error ? error.message : 'Unknown error',
         }).catch(() => undefined);

@@ -908,7 +908,7 @@ export default function Home() {
           void trackClientEvent('billing_drawer_opened', { location: 'analyze_blocked' });
           return;
         }
-        throw new Error(errorData.error || 'Analysis failed');
+        throw new Error(errorData.details || errorData.error || 'Analysis failed');
       }
 
       const analyzeData = await analyzeRes.json();
@@ -2222,7 +2222,7 @@ export default function Home() {
           void refreshBilling();
         }}
       />
-      <InstallAppPrompt enabled={isSignedIn && !isNative} />
+      <InstallAppPrompt enabled={!isNative} />
     </div>
   );
 }
