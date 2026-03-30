@@ -103,6 +103,18 @@ function isWordResult(value: unknown): value is WordResult {
   return requiredFields.every((field) => typeof candidate[field] === 'string' && candidate[field]!.toString().trim().length > 0);
 }
 
+function shouldUseCompactCardLayout(language: LanguageCode, variant: { term?: string; meaning?: string; example?: string }) {
+  const termLength = (variant.term || '').trim().length;
+  const meaningLength = (variant.meaning || '').trim().length;
+  const exampleLength = (variant.example || '').trim().length;
+
+  return language === 'ru'
+    || language === 'fr'
+    || termLength > 12
+    || meaningLength > 70
+    || exampleLength > 90;
+}
+
 type TabType = 'home' | 'history' | 'stats' | 'profile';
 
 export default function Home() {
@@ -1421,6 +1433,9 @@ export default function Home() {
 
                       {activeVariant && (
                         <>
+                          {(() => {
+                            const compactCardLayout = shouldUseCompactCardLayout(preferredLanguage, activeVariant);
+                            return (
                           <button
                             type="button"
                             onClick={() => {
@@ -1434,7 +1449,7 @@ export default function Home() {
                                 <span className="rounded-full border border-[var(--editorial-border)] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--editorial-muted)]">
                                   {LANGUAGE_LABELS[preferredLanguage]}
                                 </span>
-                                <h3 className="editorial-serif mt-4 break-words text-4xl font-semibold tracking-[-0.04em] sm:text-6xl">
+                                <h3 className={`editorial-serif mt-4 font-semibold tracking-[-0.04em] [overflow-wrap:anywhere] ${compactCardLayout ? 'text-3xl leading-[1.02] sm:text-5xl' : 'text-4xl leading-[0.98] sm:text-6xl'}`}>
                                   {activeVariant.term || result.word}
                                 </h3>
                                 <div className="mt-2 flex items-center gap-2">
@@ -1464,13 +1479,15 @@ export default function Home() {
                                 {ui.openCard}
                               </span>
                             </div>
-                            <p className="mt-5 w-full max-w-full rounded-[1.5rem] bg-[var(--editorial-accent)] px-5 py-4 text-base font-medium leading-7 text-black break-words sm:inline-flex sm:w-auto sm:max-w-[36rem]">
+                            <p className={`mt-5 inline-block max-w-full rounded-[1.5rem] bg-[var(--editorial-accent)] px-5 py-4 font-medium text-black [overflow-wrap:anywhere] ${compactCardLayout ? 'text-[15px] leading-7' : 'text-base leading-7'}`}>
                               {activeVariant.meaning || result.meaning}
                             </p>
-                            <p className="mt-5 line-clamp-2 text-sm leading-7 text-[var(--editorial-muted)]">
+                            <p className={`mt-5 text-[var(--editorial-muted)] [overflow-wrap:anywhere] ${compactCardLayout ? 'line-clamp-3 text-[13px] leading-6' : 'line-clamp-2 text-sm leading-7'}`}>
                               {activeVariant.example || result.sentence}
                             </p>
                           </button>
+                            );
+                          })()}
                         </>
                       )}
 
@@ -2092,6 +2109,7 @@ export default function Home() {
 
             {(() => {
               const detailVariant = cardDetail.item.variants[cardDetail.language] ?? cardDetail.item.variants[cardDetail.item.primaryLanguage];
+              const compactDetailLayout = shouldUseCompactCardLayout(cardDetail.language, detailVariant);
               return (
                 <div className="mt-6 space-y-4">
                   {cardDetail.imageUrl && (
@@ -2104,7 +2122,7 @@ export default function Home() {
 
                   <div className="rounded-[1.75rem] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.76)] p-5">
                     <p className="editorial-caption">{LANGUAGE_LABELS[cardDetail.language]}</p>
-                    <h4 className="editorial-serif mt-3 break-words text-3xl font-semibold tracking-[-0.04em] sm:text-4xl">
+                    <h4 className={`editorial-serif mt-3 font-semibold tracking-[-0.04em] [overflow-wrap:anywhere] ${compactDetailLayout ? 'text-[28px] leading-[1.02] sm:text-[34px]' : 'text-3xl leading-[0.98] sm:text-4xl'}`}>
                       {detailVariant.term || cardDetail.item.word}
                     </h4>
                     <div className="mt-2 flex items-center gap-2">
@@ -2127,7 +2145,7 @@ export default function Home() {
                         )}
                       </button>
                     </div>
-                    <p className="mt-4 rounded-[1.25rem] bg-[rgba(149,199,85,0.16)] px-4 py-3 text-sm leading-7 text-[var(--editorial-ink)] break-words">
+                    <p className={`mt-4 rounded-[1.25rem] bg-[rgba(149,199,85,0.16)] px-4 py-3 text-[var(--editorial-ink)] [overflow-wrap:anywhere] ${compactDetailLayout ? 'text-[13px] leading-6 sm:text-sm sm:leading-7' : 'text-sm leading-7'}`}>
                       {detailVariant.meaning || cardDetail.item.meaning}
                     </p>
                   </div>
@@ -2152,19 +2170,19 @@ export default function Home() {
                           )}
                         </button>
                       </div>
-                      <p className="mt-3 text-base italic text-[var(--editorial-ink)]">
+                      <p className={`mt-3 italic text-[var(--editorial-ink)] [overflow-wrap:anywhere] ${compactDetailLayout ? 'text-[15px] leading-7' : 'text-base'}`}>
                         &quot;{detailVariant.example || cardDetail.item.sentence}&quot;
                       </p>
-                      <p className="mt-3 text-sm leading-7 text-[var(--editorial-muted)]">
+                      <p className={`mt-3 text-[var(--editorial-muted)] [overflow-wrap:anywhere] ${compactDetailLayout ? 'text-[13px] leading-6' : 'text-sm leading-7'}`}>
                         {detailVariant.exampleTranslation || cardDetail.item.sentence_cn}
                       </p>
                     </div>
                     <div className="rounded-[1.75rem] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.72)] p-5">
                       <p className="editorial-caption">{ui.pronunciation}</p>
-                      <p className="mt-3 text-sm leading-7 text-[var(--editorial-ink)]">
+                      <p className={`mt-3 text-[var(--editorial-ink)] [overflow-wrap:anywhere] ${compactDetailLayout ? 'text-[13px] leading-6' : 'text-sm leading-7'}`}>
                         {detailVariant.pronunciationTip}
                       </p>
-                      <p className="mt-3 text-sm leading-7 text-[var(--editorial-muted)]">
+                      <p className={`mt-3 text-[var(--editorial-muted)] [overflow-wrap:anywhere] ${compactDetailLayout ? 'text-[13px] leading-6' : 'text-sm leading-7'}`}>
                         {detailVariant.grammarNote}
                       </p>
                     </div>
@@ -2183,7 +2201,7 @@ export default function Home() {
                     </div>
                     <div className="rounded-[1.75rem] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.72)] p-5">
                       <p className="editorial-caption">{ui.culture}</p>
-                      <p className="mt-3 text-sm leading-7 text-[var(--editorial-muted)]">
+                      <p className={`mt-3 text-[var(--editorial-muted)] [overflow-wrap:anywhere] ${compactDetailLayout ? 'text-[13px] leading-6' : 'text-sm leading-7'}`}>
                         {detailVariant.cultureNote}
                       </p>
                     </div>
