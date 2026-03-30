@@ -1873,9 +1873,6 @@ export default function Home() {
                         </button>
                       ))}
                     </div>
-                    <p className="mt-3 text-sm leading-7 text-[var(--editorial-muted)]">
-                      {ui.appLanguageHint}
-                    </p>
                   </div>
 
                 {/* Learning Reminder Removed */}
