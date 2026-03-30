@@ -1382,20 +1382,20 @@ export default function Home() {
 
               {/* Result */}
               {result && currentImage && !isUploading && !isAnalyzing && (
-                <div className="grid gap-4 lg:grid-cols-[0.92fr_1.08fr]">
+                <div className="grid gap-5 lg:grid-cols-[0.92fr_1.08fr] lg:items-start">
                   <div className="editorial-panel overflow-hidden p-3">
                     <img
                       src={currentImage}
                       alt="Uploaded"
-                      className="h-full max-h-[520px] w-full rounded-[1.75rem] object-cover"
+                      className="h-[260px] w-full rounded-[1.75rem] object-cover sm:h-full sm:max-h-[520px]"
                     />
                   </div>
 
-                  <div className="editorial-panel p-8">
-                    <div className="space-y-6">
+                  <div className="editorial-panel p-5 sm:p-8">
+                    <div className="space-y-5 sm:space-y-6">
                       <div>
                         <p className="editorial-caption">{ui.resultObject}</p>
-                        <h2 className="editorial-serif mt-3 text-4xl font-semibold tracking-[-0.04em] sm:text-5xl">
+                        <h2 className="editorial-serif mt-3 text-3xl font-semibold tracking-[-0.04em] sm:text-5xl">
                           {result.sourceObject}
                         </h2>
                         <p className="mt-2 text-sm uppercase tracking-[0.22em] text-[var(--editorial-muted)]">
@@ -1427,14 +1427,14 @@ export default function Home() {
                               playTap();
                               openCardDetail(result, currentImage, preferredLanguage);
                             }}
-                            className="w-full rounded-[1.9rem] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.76)] p-6 text-left transition-all hover:-translate-y-0.5"
+                            className="w-full rounded-[1.9rem] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.76)] p-5 text-left transition-all hover:-translate-y-0.5 sm:p-6"
                           >
-                            <div className="flex items-start justify-between gap-4">
+                            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                               <div>
                                 <span className="rounded-full border border-[var(--editorial-border)] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--editorial-muted)]">
                                   {LANGUAGE_LABELS[preferredLanguage]}
                                 </span>
-                                <h3 className="editorial-serif mt-4 text-5xl font-semibold tracking-[-0.04em] sm:text-6xl">
+                                <h3 className="editorial-serif mt-4 break-words text-4xl font-semibold tracking-[-0.04em] sm:text-6xl">
                                   {activeVariant.term || result.word}
                                 </h3>
                                 <div className="mt-2 flex items-center gap-2">
@@ -1460,11 +1460,11 @@ export default function Home() {
                                   </button>
                                 </div>
                               </div>
-                              <span className="rounded-full bg-[var(--editorial-ink)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--editorial-paper)]">
+                              <span className="self-start rounded-full bg-[var(--editorial-ink)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--editorial-paper)]">
                                 {ui.openCard}
                               </span>
                             </div>
-                            <p className="mt-5 inline-flex rounded-full bg-[var(--editorial-accent)] px-5 py-3 text-base font-medium text-black">
+                            <p className="mt-5 w-full max-w-full rounded-[1.5rem] bg-[var(--editorial-accent)] px-5 py-4 text-base font-medium leading-7 text-black break-words sm:inline-flex sm:w-auto sm:max-w-[36rem]">
                               {activeVariant.meaning || result.meaning}
                             </p>
                             <p className="mt-5 line-clamp-2 text-sm leading-7 text-[var(--editorial-muted)]">
@@ -2104,7 +2104,7 @@ export default function Home() {
 
                   <div className="rounded-[1.75rem] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.76)] p-5">
                     <p className="editorial-caption">{LANGUAGE_LABELS[cardDetail.language]}</p>
-                    <h4 className="editorial-serif mt-3 text-4xl font-semibold tracking-[-0.04em]">
+                    <h4 className="editorial-serif mt-3 break-words text-3xl font-semibold tracking-[-0.04em] sm:text-4xl">
                       {detailVariant.term || cardDetail.item.word}
                     </h4>
                     <div className="mt-2 flex items-center gap-2">
@@ -2127,7 +2127,7 @@ export default function Home() {
                         )}
                       </button>
                     </div>
-                    <p className="mt-4 text-sm leading-7 text-[var(--editorial-ink)]">
+                    <p className="mt-4 rounded-[1.25rem] bg-[rgba(149,199,85,0.16)] px-4 py-3 text-sm leading-7 text-[var(--editorial-ink)] break-words">
                       {detailVariant.meaning || cardDetail.item.meaning}
                     </p>
                   </div>
