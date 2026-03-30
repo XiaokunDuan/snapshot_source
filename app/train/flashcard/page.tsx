@@ -5,6 +5,7 @@ import { ArrowLeft, Loader2, Volume2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { normalizeLanguageCode, type LanguageCode } from '@/lib/language-content';
 import { type HistoryApiItem, normalizeHistoryItem } from '@/lib/history-records';
+import { playTtsAudio } from '@/lib/tts-client';
 
 interface WordCard {
     id: string;
@@ -28,6 +29,7 @@ export default function FlashcardTraining() {
     const [unknownCount, setUnknownCount] = useState(0);
     const [isLoading, setIsLoading] = useState(true);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const [ttsLoadingSlot, setTtsLoadingSlot] = useState<'word' | 'sentence' | null>(null);
     const totalCards = cards.length;
 
     useEffect(() => {
@@ -128,6 +130,23 @@ export default function FlashcardTraining() {
         }
     };
 
+    const handlePlayAudio = async (text: string, slot: 'word' | 'sentence') => {
+        const language = currentCard?.language;
+        if (!text.trim() || !language) {
+            return;
+        }
+
+        try {
+            setTtsLoadingSlot(slot);
+            await playTtsAudio(language, text.trim());
+        } catch (error) {
+            console.error('Flashcard TTS error:', error);
+            alert('Audio is temporarily unavailable');
+        } finally {
+            setTtsLoadingSlot((current) => (current === slot ? null : current));
+        }
+    };
+
     if (isLoading) {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -211,8 +230,16 @@ export default function FlashcardTraining() {
                             <p className="text-2xl text-gray-600 font-mono">
                                 {currentCard.phonetic}
                             </p>
-                            <button className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-                                <Volume2 className="w-5 h-5 text-lime-600" />
+                            <button
+                                onClick={() => void handlePlayAudio(currentCard.word, 'word')}
+                                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                                aria-label="Play pronunciation"
+                            >
+                                {ttsLoadingSlot === 'word' ? (
+                                    <Loader2 className="w-5 h-5 animate-spin text-lime-600" />
+                                ) : (
+                                    <Volume2 className="w-5 h-5 text-lime-600" />
+                                )}
                             </button>
                         </div>
                     </div>
@@ -223,9 +250,22 @@ export default function FlashcardTraining() {
                             {currentCard.meaning}
                         </p>
                         <div className="text-left bg-gray-50 rounded-2xl p-4">
-                            <p className="text-gray-900 italic mb-2">
-                                &quot;{currentCard.sentence}&quot;
-                            </p>
+                            <div className="mb-2 flex items-center justify-between gap-3">
+                                <p className="text-gray-900 italic">
+                                    &quot;{currentCard.sentence}&quot;
+                                </p>
+                                <button
+                                    onClick={() => void handlePlayAudio(currentCard.sentence, 'sentence')}
+                                    className="shrink-0 rounded-full p-2 hover:bg-gray-100 transition-colors"
+                                    aria-label="Play example sentence"
+                                >
+                                    {ttsLoadingSlot === 'sentence' ? (
+                                        <Loader2 className="w-5 h-5 animate-spin text-lime-600" />
+                                    ) : (
+                                        <Volume2 className="w-5 h-5 text-lime-600" />
+                                    )}
+                                </button>
+                            </div>
                             <p className="text-gray-600 text-sm">
                                 {currentCard.sentence_cn}
                             </p>

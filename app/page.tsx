@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { SignOutButton, useUser, UserButton } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
-import { Camera as CameraIcon, BookOpen, User as UserIcon, Home as HomeIcon, BarChart3, Loader2, Edit2, Trash2, Sparkles, ShieldCheck, X, MoveDown } from 'lucide-react';
+import { Camera as CameraIcon, BookOpen, User as UserIcon, Home as HomeIcon, BarChart3, Loader2, Edit2, Trash2, Sparkles, ShieldCheck, X, MoveDown, Volume2 } from 'lucide-react';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import confetti from 'canvas-confetti';
 import { PageTransition } from '@/components/Animation';
@@ -21,6 +21,7 @@ import { trackClientEvent } from '@/lib/analytics-client';
 import { LocaleToggle, useLocale } from '@/app/components/LocaleProvider';
 import { DEFAULT_LANGUAGE, LANGUAGE_LABELS, normalizeLanguageCode, normalizeVariants, SUPPORTED_LANGUAGE_CODES, type LanguageCode } from '@/lib/language-content';
 import { type WordResult, type HistoryItem, type HistoryApiItem, normalizeHistoryItem } from '@/lib/history-records';
+import { playTtsAudio } from '@/lib/tts-client';
 
 interface CardDetailState {
   item: WordResult;
@@ -124,6 +125,7 @@ export default function Home() {
   const [preferredLanguage, setPreferredLanguage] = useState<LanguageCode>(DEFAULT_LANGUAGE);
   const [targetLanguages, setTargetLanguages] = useState<LanguageCode[]>(['en']);
   const [cardDetail, setCardDetail] = useState<CardDetailState | null>(null);
+  const [ttsLoadingKey, setTtsLoadingKey] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
 
@@ -571,6 +573,25 @@ export default function Home() {
       oscillator.stop(now + 0.08);
     } catch {
       // no-op
+    }
+  };
+
+  const handlePlayAudio = async (language: LanguageCode, text: string, slot: 'term' | 'example' = 'term') => {
+    const normalizedText = text.trim();
+    if (!normalizedText) {
+      return;
+    }
+
+    const key = `${language}:${slot}:${normalizedText}`;
+
+    try {
+      setTtsLoadingKey(key);
+      await playTtsAudio(language, normalizedText);
+    } catch (error) {
+      console.error('Failed to play TTS audio:', error);
+      alert(locale === 'en' ? 'Audio is temporarily unavailable' : '语音暂时不可用');
+    } finally {
+      setTtsLoadingKey((current) => (current === key ? null : current));
     }
   };
 
@@ -1416,9 +1437,28 @@ export default function Home() {
                                 <h3 className="editorial-serif mt-4 text-5xl font-semibold tracking-[-0.04em] sm:text-6xl">
                                   {activeVariant.term || result.word}
                                 </h3>
-                                <p className="mt-2 font-mono text-lg text-[var(--editorial-accent)]">
-                                  {activeVariant.phonetic || result.phonetic}
-                                </p>
+                                <div className="mt-2 flex items-center gap-2">
+                                  <p className="font-mono text-lg text-[var(--editorial-accent)]">
+                                    {activeVariant.phonetic || result.phonetic}
+                                  </p>
+                                  <button
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.preventDefault();
+                                      event.stopPropagation();
+                                      playTap();
+                                      void handlePlayAudio(preferredLanguage, activeVariant.term || result.word, 'term');
+                                    }}
+                                    className="rounded-full border border-[var(--editorial-border)] p-2 text-[var(--editorial-accent)] transition-colors hover:bg-[rgba(149,199,85,0.12)]"
+                                    aria-label={locale === 'en' ? 'Play pronunciation' : '播放发音'}
+                                  >
+                                    {ttsLoadingKey === `${preferredLanguage}:term:${(activeVariant.term || result.word).trim()}` ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Volume2 className="h-4 w-4" />
+                                    )}
+                                  </button>
+                                </div>
                               </div>
                               <span className="rounded-full bg-[var(--editorial-ink)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--editorial-paper)]">
                                 {ui.openCard}
@@ -2067,9 +2107,26 @@ export default function Home() {
                     <h4 className="editorial-serif mt-3 text-4xl font-semibold tracking-[-0.04em]">
                       {detailVariant.term || cardDetail.item.word}
                     </h4>
-                    <p className="mt-2 font-mono text-lg text-[var(--editorial-accent)]">
-                      {detailVariant.phonetic || cardDetail.item.phonetic}
-                    </p>
+                    <div className="mt-2 flex items-center gap-2">
+                      <p className="font-mono text-lg text-[var(--editorial-accent)]">
+                        {detailVariant.phonetic || cardDetail.item.phonetic}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          playTap();
+                          void handlePlayAudio(cardDetail.language, detailVariant.term || cardDetail.item.word, 'term');
+                        }}
+                        className="rounded-full border border-[var(--editorial-border)] p-2 text-[var(--editorial-accent)] transition-colors hover:bg-[rgba(149,199,85,0.12)]"
+                        aria-label={locale === 'en' ? 'Play pronunciation' : '播放发音'}
+                      >
+                        {ttsLoadingKey === `${cardDetail.language}:term:${(detailVariant.term || cardDetail.item.word).trim()}` ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Volume2 className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
                     <p className="mt-4 text-sm leading-7 text-[var(--editorial-ink)]">
                       {detailVariant.meaning || cardDetail.item.meaning}
                     </p>
@@ -2077,7 +2134,24 @@ export default function Home() {
 
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="rounded-[1.75rem] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.72)] p-5">
-                      <p className="editorial-caption">{ui.example}</p>
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="editorial-caption">{ui.example}</p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            playTap();
+                            void handlePlayAudio(cardDetail.language, detailVariant.example || cardDetail.item.sentence, 'example');
+                          }}
+                          className="rounded-full border border-[var(--editorial-border)] p-2 text-[var(--editorial-accent)] transition-colors hover:bg-[rgba(149,199,85,0.12)]"
+                          aria-label={locale === 'en' ? 'Play example sentence' : '播放例句'}
+                        >
+                          {ttsLoadingKey === `${cardDetail.language}:example:${(detailVariant.example || cardDetail.item.sentence).trim()}` ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Volume2 className="h-4 w-4" />
+                          )}
+                        </button>
+                      </div>
                       <p className="mt-3 text-base italic text-[var(--editorial-ink)]">
                         &quot;{detailVariant.example || cardDetail.item.sentence}&quot;
                       </p>
