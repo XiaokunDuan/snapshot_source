@@ -5,6 +5,7 @@ import { ArrowLeft, Loader2, Volume2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { normalizeLanguageCode, type LanguageCode } from '@/lib/language-content';
 import { type HistoryApiItem, normalizeHistoryItem } from '@/lib/history-records';
+import { playTtsAudio } from '@/lib/tts-client';
 
 interface WordCard {
     id: string;
@@ -28,6 +29,7 @@ export default function FlashcardTraining() {
     const [unknownCount, setUnknownCount] = useState(0);
     const [isLoading, setIsLoading] = useState(true);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const [ttsLoading, setTtsLoading] = useState(false);
     const totalCards = cards.length;
 
     useEffect(() => {
@@ -128,6 +130,22 @@ export default function FlashcardTraining() {
         }
     };
 
+    const handlePlayAudio = async () => {
+        if (!currentCard?.word) {
+            return;
+        }
+
+        try {
+            setTtsLoading(true);
+            await playTtsAudio(currentCard.language, currentCard.word);
+        } catch (error) {
+            console.error('Flashcard TTS error:', error);
+            alert('Audio is temporarily unavailable');
+        } finally {
+            setTtsLoading(false);
+        }
+    };
+
     if (isLoading) {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -211,8 +229,16 @@ export default function FlashcardTraining() {
                             <p className="text-2xl text-gray-600 font-mono">
                                 {currentCard.phonetic}
                             </p>
-                            <button className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-                                <Volume2 className="w-5 h-5 text-lime-600" />
+                            <button
+                                onClick={() => void handlePlayAudio()}
+                                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                                aria-label="Play pronunciation"
+                            >
+                                {ttsLoading ? (
+                                    <Loader2 className="w-5 h-5 animate-spin text-lime-600" />
+                                ) : (
+                                    <Volume2 className="w-5 h-5 text-lime-600" />
+                                )}
                             </button>
                         </div>
                     </div>
