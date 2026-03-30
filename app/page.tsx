@@ -576,17 +576,17 @@ export default function Home() {
     }
   };
 
-  const handlePlayTermAudio = async (language: LanguageCode, term: string) => {
-    const normalizedTerm = term.trim();
-    if (!normalizedTerm) {
+  const handlePlayAudio = async (language: LanguageCode, text: string, slot: 'term' | 'example' = 'term') => {
+    const normalizedText = text.trim();
+    if (!normalizedText) {
       return;
     }
 
-    const key = `${language}:${normalizedTerm}`;
+    const key = `${language}:${slot}:${normalizedText}`;
 
     try {
       setTtsLoadingKey(key);
-      await playTtsAudio(language, normalizedTerm);
+      await playTtsAudio(language, normalizedText);
     } catch (error) {
       console.error('Failed to play TTS audio:', error);
       alert(locale === 'en' ? 'Audio is temporarily unavailable' : '语音暂时不可用');
@@ -1447,12 +1447,12 @@ export default function Home() {
                                       event.preventDefault();
                                       event.stopPropagation();
                                       playTap();
-                                      void handlePlayTermAudio(preferredLanguage, activeVariant.term || result.word);
+                                      void handlePlayAudio(preferredLanguage, activeVariant.term || result.word, 'term');
                                     }}
                                     className="rounded-full border border-[var(--editorial-border)] p-2 text-[var(--editorial-accent)] transition-colors hover:bg-[rgba(149,199,85,0.12)]"
                                     aria-label={locale === 'en' ? 'Play pronunciation' : '播放发音'}
                                   >
-                                    {ttsLoadingKey === `${preferredLanguage}:${(activeVariant.term || result.word).trim()}` ? (
+                                    {ttsLoadingKey === `${preferredLanguage}:term:${(activeVariant.term || result.word).trim()}` ? (
                                       <Loader2 className="h-4 w-4 animate-spin" />
                                     ) : (
                                       <Volume2 className="h-4 w-4" />
@@ -2115,12 +2115,12 @@ export default function Home() {
                         type="button"
                         onClick={() => {
                           playTap();
-                          void handlePlayTermAudio(cardDetail.language, detailVariant.term || cardDetail.item.word);
+                          void handlePlayAudio(cardDetail.language, detailVariant.term || cardDetail.item.word, 'term');
                         }}
                         className="rounded-full border border-[var(--editorial-border)] p-2 text-[var(--editorial-accent)] transition-colors hover:bg-[rgba(149,199,85,0.12)]"
                         aria-label={locale === 'en' ? 'Play pronunciation' : '播放发音'}
                       >
-                        {ttsLoadingKey === `${cardDetail.language}:${(detailVariant.term || cardDetail.item.word).trim()}` ? (
+                        {ttsLoadingKey === `${cardDetail.language}:term:${(detailVariant.term || cardDetail.item.word).trim()}` ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
                         ) : (
                           <Volume2 className="h-4 w-4" />
@@ -2134,7 +2134,24 @@ export default function Home() {
 
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="rounded-[1.75rem] border border-[var(--editorial-border)] bg-[rgba(255,251,244,0.72)] p-5">
-                      <p className="editorial-caption">{ui.example}</p>
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="editorial-caption">{ui.example}</p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            playTap();
+                            void handlePlayAudio(cardDetail.language, detailVariant.example || cardDetail.item.sentence, 'example');
+                          }}
+                          className="rounded-full border border-[var(--editorial-border)] p-2 text-[var(--editorial-accent)] transition-colors hover:bg-[rgba(149,199,85,0.12)]"
+                          aria-label={locale === 'en' ? 'Play example sentence' : '播放例句'}
+                        >
+                          {ttsLoadingKey === `${cardDetail.language}:example:${(detailVariant.example || cardDetail.item.sentence).trim()}` ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Volume2 className="h-4 w-4" />
+                          )}
+                        </button>
+                      </div>
                       <p className="mt-3 text-base italic text-[var(--editorial-ink)]">
                         &quot;{detailVariant.example || cardDetail.item.sentence}&quot;
                       </p>
