@@ -3,27 +3,23 @@ import { getPool, type DbClient } from '@/lib/db';
 import { getDbUserByClerkId, type AppUser } from '@/lib/users';
 import { getStripe, getStripePriceId } from '@/lib/stripe';
 import { sendPaymentFailedEmail, sendTrialStartedEmail } from '@/lib/resend';
+import {
+  buildEntitlementStatus,
+  buildFreeEntitlementStatus,
+  ENTITLED_STATUSES,
+  MONTHLY_ANALYZE_LIMIT,
+  type EntitlementStatus,
+  type EntitlementStatusRow,
+  toEntitlementPeriodDate,
+} from '@/lib/entitlements';
 
-const MONTHLY_ANALYZE_LIMIT = 100;
-const FREE_ANALYZE_LIMIT = 20;
-const ENTITLED_STATUSES = new Set(['trialing', 'active']);
-
-export interface BillingStatus {
-  subscriptionStatus: string;
-  hasAccess: boolean;
-  monthlyLimit: number;
-  usageCount: number;
-  remaining: number;
-  trialEndsAt: string | null;
-  currentPeriodStart: string | null;
-  currentPeriodEnd: string | null;
-  cancelAtPeriodEnd: boolean;
-}
+export type BillingStatus = EntitlementStatus;
 
 async function ensureBillingTables(client: DbClient) {
   await client.query(`
     CREATE TABLE IF NOT EXISTS billing_customers (
       user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      source_kind VARCHAR(32) NOT NULL DEFAULT 'stripe',
       stripe_customer_id VARCHAR(255) UNIQUE NOT NULL,
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
@@ -33,6 +29,8 @@ async function ensureBillingTables(client: DbClient) {
   await client.query(`
     CREATE TABLE IF NOT EXISTS subscriptions (
       user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      source_kind VARCHAR(32) NOT NULL DEFAULT 'stripe',
+      source_reference_id VARCHAR(255),
       stripe_customer_id VARCHAR(255) NOT NULL,
       stripe_subscription_id VARCHAR(255) UNIQUE NOT NULL,
       stripe_price_id VARCHAR(255),
@@ -61,11 +59,19 @@ async function ensureBillingTables(client: DbClient) {
 
   await client.query(`
     CREATE TABLE IF NOT EXISTS billing_events (
+      source_kind VARCHAR(32) NOT NULL DEFAULT 'stripe',
+      source_event_id VARCHAR(255) NOT NULL,
       stripe_event_id VARCHAR(255) PRIMARY KEY,
       event_type VARCHAR(120) NOT NULL,
       created_at TIMESTAMP DEFAULT NOW()
     )
   `);
+
+  await client.query(`ALTER TABLE billing_customers ADD COLUMN IF NOT EXISTS source_kind VARCHAR(32)`);
+  await client.query(`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS source_kind VARCHAR(32)`);
+  await client.query(`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS source_reference_id VARCHAR(255)`);
+  await client.query(`ALTER TABLE billing_events ADD COLUMN IF NOT EXISTS source_kind VARCHAR(32)`);
+  await client.query(`ALTER TABLE billing_events ADD COLUMN IF NOT EXISTS source_event_id VARCHAR(255)`);
 }
 
 async function ensureCustomer(client: DbClient, user: AppUser) {
@@ -91,10 +97,10 @@ async function ensureCustomer(client: DbClient, user: AppUser) {
   });
 
   await client.query(
-    `INSERT INTO billing_customers (user_id, stripe_customer_id, created_at, updated_at)
-     VALUES ($1, $2, NOW(), NOW())
+    `INSERT INTO billing_customers (user_id, source_kind, stripe_customer_id, created_at, updated_at)
+     VALUES ($1, 'stripe', $2, NOW(), NOW())
      ON CONFLICT (user_id)
-     DO UPDATE SET stripe_customer_id = EXCLUDED.stripe_customer_id, updated_at = NOW()`,
+     DO UPDATE SET source_kind = EXCLUDED.source_kind, stripe_customer_id = EXCLUDED.stripe_customer_id, updated_at = NOW()`,
     [user.id, customer.id]
   );
 
@@ -131,89 +137,7 @@ export function getSubscriptionPeriod(subscription: Stripe.Subscription) {
   };
 }
 
-type BillingStatusRow = {
-  status: string;
-  trial_ends_at: string | Date | null;
-  current_period_start: string | Date | null;
-  current_period_end: string | Date | null;
-  cancel_at_period_end: boolean;
-  monthly_limit: number | null;
-  analyze_count: number | null;
-};
-
-function toIsoString(value: string | Date | null | undefined) {
-  if (!value) {
-    return null;
-  }
-
-  if (value instanceof Date) {
-    return value.toISOString();
-  }
-
-  if (typeof value === 'object') {
-    const normalized = new Date(value);
-    if (!Number.isNaN(normalized.getTime())) {
-      return normalized.toISOString();
-    }
-  }
-
-  return value;
-}
-
-function toPeriodDate(value: string | Date | null | undefined) {
-  const iso = toIsoString(value);
-  if (!iso) {
-    return null;
-  }
-
-  return iso.slice(0, 10);
-}
-
-export function buildBillingStatus(row: BillingStatusRow | null): BillingStatus {
-  if (!row) {
-    return {
-      subscriptionStatus: 'inactive',
-      hasAccess: false,
-      monthlyLimit: 0,
-      usageCount: 0,
-      remaining: 0,
-      trialEndsAt: null,
-      currentPeriodStart: null,
-      currentPeriodEnd: null,
-      cancelAtPeriodEnd: false,
-    };
-  }
-
-  const monthlyLimit = row.monthly_limit ?? MONTHLY_ANALYZE_LIMIT;
-  const usageCount = row.analyze_count ?? 0;
-  const hasAccess = ENTITLED_STATUSES.has(row.status) && usageCount < monthlyLimit;
-
-  return {
-    subscriptionStatus: row.status,
-    hasAccess,
-    monthlyLimit,
-    usageCount,
-    remaining: Math.max(monthlyLimit - usageCount, 0),
-    trialEndsAt: toIsoString(row.trial_ends_at),
-    currentPeriodStart: toIsoString(row.current_period_start),
-    currentPeriodEnd: toIsoString(row.current_period_end),
-    cancelAtPeriodEnd: row.cancel_at_period_end,
-  };
-}
-
-function buildFreeBillingStatus(usageCount: number): BillingStatus {
-  return {
-    subscriptionStatus: 'free',
-    hasAccess: usageCount < FREE_ANALYZE_LIMIT,
-    monthlyLimit: FREE_ANALYZE_LIMIT,
-    usageCount,
-    remaining: Math.max(FREE_ANALYZE_LIMIT - usageCount, 0),
-    trialEndsAt: null,
-    currentPeriodStart: null,
-    currentPeriodEnd: null,
-    cancelAtPeriodEnd: false,
-  };
-}
+export { buildEntitlementStatus as buildBillingStatus, buildFreeEntitlementStatus as buildFreeBillingStatus };
 
 export async function upsertSubscriptionFromStripe(subscription: Stripe.Subscription, client?: DbClient) {
   const activeClient = client ?? await getPool().connect() as DbClient;
@@ -237,6 +161,8 @@ export async function upsertSubscriptionFromStripe(subscription: Stripe.Subscrip
     await activeClient.query(
       `INSERT INTO subscriptions (
         user_id,
+        source_kind,
+        source_reference_id,
         stripe_customer_id,
         stripe_subscription_id,
         stripe_price_id,
@@ -248,9 +174,11 @@ export async function upsertSubscriptionFromStripe(subscription: Stripe.Subscrip
         created_at,
         updated_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
+      VALUES ($1, 'stripe', $3, $2, $4, $5, $6, $7, $8, $9, NOW(), NOW())
       ON CONFLICT (user_id)
       DO UPDATE SET
+        source_kind = EXCLUDED.source_kind,
+        source_reference_id = EXCLUDED.source_reference_id,
         stripe_customer_id = EXCLUDED.stripe_customer_id,
         stripe_subscription_id = EXCLUDED.stripe_subscription_id,
         stripe_price_id = EXCLUDED.stripe_price_id,
@@ -304,8 +232,8 @@ export async function markStripeEventProcessed(eventId: string, eventType: strin
   try {
     await ensureBillingTables(client);
     const result = await client.query(
-      `INSERT INTO billing_events (stripe_event_id, event_type)
-       VALUES ($1, $2)
+      `INSERT INTO billing_events (source_kind, source_event_id, stripe_event_id, event_type)
+       VALUES ('stripe', $1, $1, $2)
        ON CONFLICT (stripe_event_id) DO NOTHING
        RETURNING stripe_event_id`,
       [eventId, eventType]
@@ -416,6 +344,7 @@ export async function getBillingStatus(userId: number, client?: DbClient): Promi
     const result = await activeClient.query(
       `SELECT
          s.status,
+         s.source_kind,
          s.trial_ends_at,
          s.current_period_start,
          s.current_period_end,
@@ -432,6 +361,7 @@ export async function getBillingStatus(userId: number, client?: DbClient): Promi
 
     const row = (result.rows[0] as {
       status: string;
+      source_kind?: 'stripe' | 'app_store' | null;
       trial_ends_at: string | null;
       current_period_start: string | null;
       current_period_end: string | null;
@@ -446,10 +376,19 @@ export async function getBillingStatus(userId: number, client?: DbClient): Promi
         [userId]
       );
       const usageCount = Number((freeUsageResult.rows[0] as { usage_count?: number } | undefined)?.usage_count ?? 0);
-      return buildFreeBillingStatus(usageCount);
+      return buildFreeEntitlementStatus(usageCount);
     }
 
-    return buildBillingStatus(row);
+    return buildEntitlementStatus({
+      source: row.source_kind ?? 'stripe',
+      status: row.status,
+      trial_ends_at: row.trial_ends_at,
+      current_period_start: row.current_period_start,
+      current_period_end: row.current_period_end,
+      cancel_at_period_end: row.cancel_at_period_end,
+      monthly_limit: row.monthly_limit,
+      analyze_count: row.analyze_count,
+    } satisfies EntitlementStatusRow);
   } finally {
     if (!client) {
       activeClient.release();
@@ -487,8 +426,8 @@ export async function consumeAnalyzeCredit(userId: number) {
       throw new Error('Monthly analyze limit reached');
     }
 
-    const periodStart = toPeriodDate(status.currentPeriodStart);
-    const periodEnd = toPeriodDate(status.currentPeriodEnd);
+    const periodStart = toEntitlementPeriodDate(status.currentPeriodStart);
+    const periodEnd = toEntitlementPeriodDate(status.currentPeriodEnd);
 
     if (!periodStart || !periodEnd) {
       throw new Error('Subscription period is not available');
