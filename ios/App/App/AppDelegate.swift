@@ -104,7 +104,10 @@ struct HistoryCard: Identifiable, Codable {
     let phonetic: String
     let meaning: String
     let example: String
+    let exampleTranslation: String
     let imageURL: String?
+    let sourceObject: String
+    let sourceLabelEn: String
     let createdAt: Date
 
     enum CodingKeys: String, CodingKey {
@@ -113,7 +116,10 @@ struct HistoryCard: Identifiable, Codable {
         case phonetic
         case meaning
         case example
+        case exampleTranslation
         case imageURL
+        case sourceObject
+        case sourceLabelEn
         case createdAt
     }
 }
@@ -134,7 +140,10 @@ private struct HistoryResponseItem: Decodable {
     let phonetic: String?
     let meaning: String
     let sentence: String?
+    let sentenceCN: String?
     let imageURL: String?
+    let sourceObject: String?
+    let sourceLabelEn: String?
     let createdAt: String
 
     enum CodingKeys: String, CodingKey {
@@ -143,7 +152,10 @@ private struct HistoryResponseItem: Decodable {
         case phonetic
         case meaning
         case sentence
+        case sentenceCN = "sentence_cn"
         case imageURL = "image_url"
+        case sourceObject = "source_object"
+        case sourceLabelEn = "source_label_en"
         case createdAt = "created_at"
     }
 }
@@ -152,6 +164,8 @@ enum APIError: LocalizedError {
     case invalidResponse
     case unauthorized
     case server(String)
+    case imagePreparationFailed
+    case cameraUnavailable
 
     var errorDescription: String? {
         switch self {
@@ -161,6 +175,63 @@ enum APIError: LocalizedError {
             return "Your session expired. Please sign in again."
         case .server(let message):
             return message
+        case .imagePreparationFailed:
+            return "Failed to prepare the selected image for upload."
+        case .cameraUnavailable:
+            return "Camera is not available on this device. Use the photo library instead."
+        }
+    }
+}
+
+enum AnalysisStage: Equatable {
+    case idle
+    case authenticating
+    case uploading
+    case analyzing
+    case saving
+
+    var title: String {
+        switch self {
+        case .idle:
+            return "Ready"
+        case .authenticating:
+            return "Signing in"
+        case .uploading:
+            return "Uploading image"
+        case .analyzing:
+            return "Analyzing image"
+        case .saving:
+            return "Saving card"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .idle:
+            return "Select an image, then run a full native upload and analysis cycle."
+        case .authenticating:
+            return "Waiting for Apple identity and backend session creation."
+        case .uploading:
+            return "Sending the selected image to your backend."
+        case .analyzing:
+            return "Generating the vocabulary card from the uploaded image."
+        case .saving:
+            return "Persisting the generated card into synced history."
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .idle:
+            return "bolt.badge.checkmark"
+        case .authenticating:
+            return "person.badge.key"
+        case .uploading:
+            return "arrow.up.circle"
+        case .analyzing:
+            return "sparkles.rectangle.stack"
+        case .saving:
+            return "square.and.arrow.down"
         }
     }
 }
@@ -262,7 +333,10 @@ struct APIClient {
                 phonetic: item.phonetic ?? "",
                 meaning: item.meaning,
                 example: item.sentence ?? "",
+                exampleTranslation: item.sentenceCN ?? "",
                 imageURL: item.imageURL,
+                sourceObject: item.sourceObject ?? item.word,
+                sourceLabelEn: item.sourceLabelEn ?? item.word,
                 createdAt: formatter.date(from: item.createdAt) ?? Date()
             )
         }
@@ -310,6 +384,7 @@ final class SnapshotAppModel: ObservableObject {
     @Published var statusMessage = "Connect Apple sign-in, then capture and analyze one image."
     @Published var isAuthenticating = false
     @Published var isAnalyzing = false
+    @Published var activeStage: AnalysisStage = .idle
 
     let apiClient: APIClient
     private let sessionStorageKey = "snapshot.session"
@@ -331,11 +406,16 @@ final class SnapshotAppModel: ObservableObject {
         "StoreKit migration pending"
     }
 
+    var isBusy: Bool {
+        isAuthenticating || isAnalyzing
+    }
+
     func signOut() {
         session = nil
         history = []
         latestAnalysis = nil
         selectedImage = nil
+        activeStage = .idle
         statusMessage = "Signed out. Use Sign in with Apple to start a fresh native session."
         UserDefaults.standard.removeObject(forKey: sessionStorageKey)
     }
@@ -369,6 +449,15 @@ final class SnapshotAppModel: ObservableObject {
         Task {
             await runAnalysis(session: session, image: image)
         }
+    }
+
+    func beginPicking(_ source: ImagePickerSource, onReady: (ImagePickerSource) -> Void) {
+        if source == .camera, !UIImagePickerController.isSourceTypeAvailable(.camera) {
+            errorMessage = APIError.cameraUnavailable.localizedDescription
+            return
+        }
+
+        onReady(source)
     }
 
     func refreshHistory() {
@@ -412,7 +501,13 @@ final class SnapshotAppModel: ObservableObject {
     private func authenticate(identityToken: String, fullName: String?) async {
         isAuthenticating = true
         errorMessage = nil
-        defer { isAuthenticating = false }
+        activeStage = .authenticating
+        defer {
+            isAuthenticating = false
+            if !isAnalyzing {
+                activeStage = .idle
+            }
+        }
 
         do {
             let session = try await apiClient.signInWithApple(identityToken: identityToken, fullName: fullName)
@@ -428,14 +523,18 @@ final class SnapshotAppModel: ObservableObject {
         isAnalyzing = true
         errorMessage = nil
         latestAnalysis = nil
-        defer { isAnalyzing = false }
+        defer {
+            isAnalyzing = false
+            activeStage = .idle
+        }
 
         guard let imageData = image.jpegData(compressionQuality: 0.85) else {
-            errorMessage = "Failed to prepare the selected image for upload."
+            errorMessage = APIError.imagePreparationFailed.localizedDescription
             return
         }
 
         do {
+            activeStage = .uploading
             statusMessage = "Uploading image..."
             let imageURL = try await apiClient.uploadImage(
                 session: session,
@@ -443,10 +542,12 @@ final class SnapshotAppModel: ObservableObject {
                 fileName: "snapshot-\(UUID().uuidString).jpg"
             )
 
+            activeStage = .analyzing
             statusMessage = "Running analysis..."
             let analysis = try await apiClient.analyzeImage(session: session, imageURL: imageURL)
             latestAnalysis = analysis
 
+            activeStage = .saving
             statusMessage = "Saving study card..."
             try await apiClient.saveHistory(session: session, analysis: analysis, imageURL: imageURL)
 
@@ -514,6 +615,8 @@ struct HomeScreen: View {
                 VStack(alignment: .leading, spacing: 20) {
                     header
                     statusBlock
+                    signInBlock
+                    progressBlock
                     pickerButtons
                     selectedImageSection
                     latestAnalysisSection
@@ -557,19 +660,59 @@ struct HomeScreen: View {
         )
     }
 
+    @ViewBuilder
+    private var signInBlock: some View {
+        if !model.isSignedIn {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Sign in first")
+                    .font(.headline)
+                SignInWithAppleButton(.signIn) { request in
+                    request.requestedScopes = [.fullName, .email]
+                } onCompletion: { result in
+                    model.handleAppleSignIn(result: result)
+                }
+                .signInWithAppleButtonStyle(.black)
+                .frame(height: 52)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .disabled(model.isBusy)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var progressBlock: some View {
+        if model.isBusy {
+            FeatureBlock(
+                title: model.activeStage.title,
+                subtitle: model.activeStage.detail,
+                systemImage: model.activeStage.systemImage
+            )
+            .overlay(alignment: .trailing) {
+                ProgressView()
+                    .padding(.trailing, 18)
+            }
+        }
+    }
+
     private var pickerButtons: some View {
         VStack(spacing: 12) {
             Button {
-                activePicker = .camera
+                model.beginPicking(.camera) { source in
+                    activePicker = source
+                }
             } label: {
                 ActionRow(title: "Capture Photo", subtitle: "Use the camera as the native intake flow.", systemImage: "camera")
             }
+            .disabled(model.isBusy)
 
             Button {
-                activePicker = .photoLibrary
+                model.beginPicking(.photoLibrary) { source in
+                    activePicker = source
+                }
             } label: {
                 ActionRow(title: "Choose from Library", subtitle: "Import an existing image before analysis.", systemImage: "photo.on.rectangle")
             }
+            .disabled(model.isBusy)
         }
         .buttonStyle(.plain)
     }
@@ -590,7 +733,7 @@ struct HomeScreen: View {
                     model.analyzeSelectedImage()
                 }
                 .buttonStyle(PrimaryButtonStyle())
-                .disabled(!model.isSignedIn || model.isAnalyzing)
+                .disabled(!model.isSignedIn || model.isBusy)
             }
         }
     }
@@ -680,6 +823,20 @@ struct HistoryDetailScreen: View {
                         phonetic: card.phonetic,
                         meaning: card.meaning,
                         example: card.example
+                    )
+
+                    if !card.exampleTranslation.isEmpty {
+                        FeatureBlock(
+                            title: "Example Translation",
+                            subtitle: card.exampleTranslation,
+                            systemImage: "text.bubble"
+                        )
+                    }
+
+                    FeatureBlock(
+                        title: card.sourceObject,
+                        subtitle: card.sourceLabelEn,
+                        systemImage: "tag"
                     )
 
                     if let imageURL = card.imageURL, !imageURL.isEmpty {
