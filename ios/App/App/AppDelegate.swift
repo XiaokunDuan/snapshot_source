@@ -385,6 +385,8 @@ final class SnapshotAppModel: ObservableObject {
     @Published var isAuthenticating = false
     @Published var isAnalyzing = false
     @Published var activeStage: AnalysisStage = .idle
+    @Published var isRefreshingHistory = false
+    @Published var lastHistorySyncDescription = "History has not been refreshed yet."
 
     let apiClient: APIClient
     private let sessionStorageKey = "snapshot.session"
@@ -559,8 +561,16 @@ final class SnapshotAppModel: ObservableObject {
     }
 
     private func loadHistory(session: SessionState) async {
+        isRefreshingHistory = true
+        defer { isRefreshingHistory = false }
+
         do {
             history = try await apiClient.fetchHistory(session: session)
+            if let latest = history.first {
+                lastHistorySyncDescription = "Latest card: \(latest.title) at \(latest.createdAt.formatted(date: .abbreviated, time: .shortened))"
+            } else {
+                lastHistorySyncDescription = "History is empty. Analyze one image to create the first saved card."
+            }
         } catch {
             handle(error)
         }
@@ -761,26 +771,74 @@ struct HistoryScreen: View {
             List {
                 if model.history.isEmpty {
                     Section {
-                        Text("No synced history yet. Sign in and analyze one image to populate this list.")
-                            .foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("No synced history yet.")
+                                .font(.headline)
+                            Text("Sign in, run one analysis, and this page will become your saved vocabulary archive.")
+                                .foregroundStyle(.secondary)
+
+                            if model.isRefreshingHistory {
+                                ProgressView("Refreshing history…")
+                                    .padding(.top, 4)
+                            } else {
+                                Text(model.lastHistorySyncDescription)
+                                    .font(.footnote)
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
+                        .padding(.vertical, 8)
                     }
                 } else {
+                    Section {
+                        FeatureBlock(
+                            title: model.isRefreshingHistory ? "Refreshing History" : "History Synced",
+                            subtitle: model.isRefreshingHistory ? "Pulling the latest saved cards from your backend." : model.lastHistorySyncDescription,
+                            systemImage: model.isRefreshingHistory ? "arrow.triangle.2.circlepath" : "checkmark.arrow.trianglehead.clockwise"
+                        )
+                        .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+                    }
+
                     Section("Archived Cards") {
                         ForEach(model.history) { card in
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text(card.title)
-                                    .font(.headline)
-                                if !card.phonetic.isEmpty {
-                                    Text(card.phonetic)
-                                        .font(.caption.monospaced())
+                            HStack(alignment: .top, spacing: 14) {
+                                HistoryThumbnail(imageURL: card.imageURL)
+
+                                VStack(alignment: .leading, spacing: 6) {
+                                    HStack(alignment: .top) {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(card.title)
+                                                .font(.headline)
+                                            if !card.phonetic.isEmpty {
+                                                Text(card.phonetic)
+                                                    .font(.caption.monospaced())
+                                                    .foregroundStyle(.secondary)
+                                            }
+                                        }
+
+                                        Spacer()
+
+                                        Text(card.createdAt.formatted(date: .abbreviated, time: .shortened))
+                                            .font(.caption)
+                                            .foregroundStyle(.tertiary)
+                                            .multilineTextAlignment(.trailing)
+                                    }
+
+                                    Text(card.meaning)
+                                        .font(.subheadline)
                                         .foregroundStyle(.secondary)
+                                        .lineLimit(2)
+
+                                    if !card.example.isEmpty {
+                                        Text(card.example)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(2)
+                                    }
+
+                                    Label(card.sourceLabelEn, systemImage: "tag")
+                                        .font(.caption)
+                                        .foregroundStyle(.tertiary)
                                 }
-                                Text(card.meaning)
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                                Text(card.createdAt.formatted(date: .abbreviated, time: .shortened))
-                                    .font(.caption)
-                                    .foregroundStyle(.tertiary)
                             }
                             .padding(.vertical, 4)
                             .contentShape(Rectangle())
@@ -840,9 +898,16 @@ struct HistoryDetailScreen: View {
                     )
 
                     if let imageURL = card.imageURL, !imageURL.isEmpty {
-                        Link(destination: URL(string: imageURL)!) {
-                            Label("Open saved image", systemImage: "photo")
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Saved Image")
                                 .font(.headline)
+
+                            HistoryRemoteImage(imageURL: imageURL)
+
+                            Link(destination: URL(string: imageURL)!) {
+                                Label("Open saved image", systemImage: "arrow.up.right.square")
+                                    .font(.subheadline.weight(.semibold))
+                            }
                         }
                     }
 
@@ -1170,6 +1235,84 @@ struct MetricPill: View {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(tint.opacity(0.14))
         )
+    }
+}
+
+struct HistoryThumbnail: View {
+    let imageURL: String?
+
+    var body: some View {
+        Group {
+            if let imageURL, let url = URL(string: imageURL), !imageURL.isEmpty {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    case .failure:
+                        thumbnailFallback(systemImage: "photo.badge.exclamationmark")
+                    case .empty:
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .fill(Color(uiColor: .secondarySystemBackground))
+                            ProgressView()
+                        }
+                    @unknown default:
+                        thumbnailFallback(systemImage: "photo")
+                    }
+                }
+            } else {
+                thumbnailFallback(systemImage: "photo")
+            }
+        }
+        .frame(width: 72, height: 72)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    @ViewBuilder
+    private func thumbnailFallback(systemImage: String) -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(uiColor: .secondarySystemBackground))
+            Image(systemName: systemImage)
+                .font(.title3)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+struct HistoryRemoteImage: View {
+    let imageURL: String
+
+    var body: some View {
+        if let url = URL(string: imageURL) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: .infinity)
+                        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                case .failure:
+                    FeatureBlock(
+                        title: "Image unavailable",
+                        subtitle: "The remote image could not be loaded right now. You can still open it directly.",
+                        systemImage: "photo.badge.exclamationmark"
+                    )
+                case .empty:
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .fill(Color(uiColor: .secondarySystemBackground))
+                            .frame(height: 220)
+                        ProgressView("Loading image…")
+                    }
+                @unknown default:
+                    EmptyView()
+                }
+            }
+        }
     }
 }
 
