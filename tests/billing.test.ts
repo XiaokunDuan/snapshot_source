@@ -24,6 +24,7 @@ describe('billing helpers', () => {
 
   it('falls back to trial dates when usage row is missing', () => {
     const status = buildBillingStatus({
+      source: 'stripe',
       status: 'trialing',
       trial_ends_at: '2026-04-01T06:10:25.000Z',
       current_period_start: '2026-03-29T06:10:25.000Z',
@@ -40,6 +41,7 @@ describe('billing helpers', () => {
 
   it('returns inactive defaults when no row exists', () => {
     expect(buildBillingStatus(null)).toEqual({
+      source: 'free',
       subscriptionStatus: 'inactive',
       hasAccess: false,
       monthlyLimit: 0,

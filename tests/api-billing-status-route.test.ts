@@ -25,14 +25,24 @@ describe('/api/billing/status', () => {
 
   it('returns billing payload for authenticated users', async () => {
     requireDbUser.mockResolvedValue({ id: 7 });
-    getBillingStatus.mockResolvedValue({ subscriptionStatus: 'trialing', hasAccess: true, remaining: 99 });
+    getBillingStatus.mockResolvedValue({
+      source: 'stripe',
+      subscriptionStatus: 'trialing',
+      hasAccess: true,
+      remaining: 99,
+    });
 
     const { GET } = await import('../app/api/billing/status/route');
     const response = await GET(new NextRequest('http://localhost/api/billing/status'));
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
-      billing: { subscriptionStatus: 'trialing', hasAccess: true, remaining: 99 },
+      billing: {
+        source: 'stripe',
+        subscriptionStatus: 'trialing',
+        hasAccess: true,
+        remaining: 99,
+      },
     });
   });
 
