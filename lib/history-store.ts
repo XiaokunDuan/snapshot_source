@@ -17,6 +17,11 @@ export interface HistoryRecord {
   created_at: string;
 }
 
+export interface HistoryOverview {
+  totalCount: number;
+  recent: HistoryRecord[];
+}
+
 let pool: Pool | null = null;
 type HistoryClient = {
   query: (text: string, params?: unknown[]) => Promise<{ rows: unknown[] }>;
@@ -124,6 +129,36 @@ export async function listHistory(userId: number, limit = 50): Promise<HistoryRe
     );
 
     return rows.rows as HistoryRecord[];
+  } finally {
+    client.release();
+  }
+}
+
+export async function getHistoryOverview(userId: number, limit = 5): Promise<HistoryOverview> {
+  const client = await getPool().connect() as HistoryClient;
+
+  try {
+    await ensureHistoryTable(client);
+    const rows = await client.query(
+      `SELECT *,
+              COUNT(*) OVER()::int AS total_count
+       FROM vocabulary_history
+       WHERE user_id = $1
+       ORDER BY created_at DESC
+       LIMIT $2`,
+      [userId, limit]
+    );
+
+    const recent = rows.rows as Array<HistoryRecord & { total_count?: number }>;
+
+    return {
+      totalCount: recent[0]?.total_count ?? 0,
+      recent: recent.map((record) => {
+        const historyRecord = { ...record } as HistoryRecord & { total_count?: number };
+        delete historyRecord.total_count;
+        return historyRecord;
+      }),
+    };
   } finally {
     client.release();
   }
