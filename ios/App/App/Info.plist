@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-        <string>Snapshot</string>
+	<string>Snapshot</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -22,12 +22,14 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.education</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Snapshot needs camera access so users can capture study images directly in the native app.</string>
+	<string>Snapshot needs camera access so you can capture a scene and turn it into a study card.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Snapshot needs photo library access so users can import images into their study history.</string>
+	<string>Snapshot needs photo library access so you can import an image into your study flow.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Snapshot may save generated visuals and exports back to the photo library.</string>
+	<string>Snapshot may save generated images or exports back to your photo library when you choose to save them.</string>
 	<key>SnapshotAPIBaseURL</key>
 	<string>https://yulu34.top</string>
 	<key>UILaunchStoryboardName</key>
