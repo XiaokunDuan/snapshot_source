@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>Snapshot</strong> is an image-first language learning product.
-  It turns a photo into a useful study unit: concept extraction, multilingual cards, learning history, and a live web workflow that is ready to use on desktop or mobile.
+  It turns a photo into a useful study unit: concept extraction, multilingual cards, learning history, and a native iOS/iPadOS workflow backed by a web API.
 </p>
 
 <p align="center">
@@ -17,6 +17,8 @@
   <a href="#product-preview">Preview</a>
   ·
   <a href="#quickstart">Quickstart</a>
+  ·
+  <a href="#release-readiness">Release Readiness</a>
   ·
   <a href="#roadmap">Roadmap</a>
 </p>
@@ -56,7 +58,7 @@ This makes the product useful in ordinary moments:
 - Generates multilingual study content for the detected concept
 - Saves results into language-specific libraries and history
 - Tracks usage, streaks, and subscription state
-- Supports a native iOS transition while the existing web stack is still being decomposed
+- Supports a native iOS/iPadOS client while the existing web stack is still being decomposed
 
 ## Demo
 
@@ -64,14 +66,20 @@ This makes the product useful in ordinary moments:
 - Main analyze flow: upload or capture an image, then review the generated learning card
 - Typical output: concept, translations, study history, and library entries by target language
 
+## Release Readiness
+
+- App Store prep notes and submission checklist: [`docs/app-store-prep.md`](./docs/app-store-prep.md)
+- Privacy and permission copy reference: [`docs/privacy-copy.md`](./docs/privacy-copy.md)
+- Release-oriented environment template: [`env.example`](./env.example)
+
 ## Architecture
 
 ### Frontend
 
-- Next.js 16 App Router
+- Next.js 16 App Router for legacy web surfaces and API routes
 - React 19
 - Tailwind CSS 4
-- Clerk auth flows
+- Legacy web auth flows
 - Framer Motion
 - Native iOS shell under `ios/`
 
@@ -80,7 +88,7 @@ This makes the product useful in ordinary moments:
 - App Router API routes
 - Neon Postgres
 - Cloudflare R2
-- Stripe subscriptions and webhooks
+- Stripe subscriptions and webhooks for the web side, plus App Store billing foundations
 - Sentry monitoring
 - Resend transactional email hooks
 
@@ -167,6 +175,15 @@ NEXT_PUBLIC_APP_URL=https://www.yulu34.top
 CAP_SERVER_URL=https://www.yulu34.top
 ```
 
+### Release and Support
+
+```bash
+NEXT_PUBLIC_SUPPORT_EMAIL=support@example.com
+NEXT_PUBLIC_PRIVACY_POLICY_URL=https://example.com/privacy
+NEXT_PUBLIC_TERMS_URL=https://example.com/terms
+NEXT_PUBLIC_APP_STORE_URL=https://apps.apple.com/app/id0000000000
+```
+
 ### Billing and Monitoring
 
 ```bash
@@ -205,13 +222,14 @@ npm run build
 
 ## Deployment
 
-Snapshot is deployed on Vercel.
+Snapshot is deployed on Vercel for the web backend and distributed through Apple platforms for the native client.
 
 1. Import the repository into Vercel.
 2. Add the same environment variables used locally.
 3. Point the production domain to the Vercel project.
 4. Run `npm run db:setup` against the target database.
 5. Push to `main` for production deployment.
+6. For Apple release work, follow the checklist in `docs/app-store-prep.md`.
 
 ## Roadmap
 
