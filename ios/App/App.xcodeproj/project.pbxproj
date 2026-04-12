@@ -8,6 +8,13 @@
 
 /* Begin PBXBuildFile section */
 		504EC3081FED79650016851F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504EC3071FED79650016851F /* AppDelegate.swift */; };
+		504EC3191FED79650016851F /* SnapshotAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504EC3201FED79650016851F /* SnapshotAPIClient.swift */; };
+		504EC31A1FED79650016851F /* SnapshotAppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504EC3211FED79650016851F /* SnapshotAppModel.swift */; };
+		504EC31B1FED79650016851F /* SnapshotComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504EC3221FED79650016851F /* SnapshotComponents.swift */; };
+		504EC31C1FED79650016851F /* SnapshotConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504EC3231FED79650016851F /* SnapshotConfig.swift */; };
+		504EC31D1FED79650016851F /* ImagePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504EC3241FED79650016851F /* ImagePicker.swift */; };
+		504EC31E1FED79650016851F /* SnapshotModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504EC3251FED79650016851F /* SnapshotModels.swift */; };
+		504EC31F1FED79650016851F /* SnapshotViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504EC3261FED79650016851F /* SnapshotViews.swift */; };
 		504EC30F1FED79650016851F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30E1FED79650016851F /* Assets.xcassets */; };
 		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
 /* End PBXBuildFile section */
@@ -16,6 +23,13 @@
 		504EC3041FED79650016851F /* App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = App.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		50A91A5B2EED000100000001 /* App.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = App.entitlements; sourceTree = "<group>"; };
 		504EC3071FED79650016851F /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		504EC3201FED79650016851F /* SnapshotAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = API/SnapshotAPIClient.swift; sourceTree = "<group>"; };
+		504EC3211FED79650016851F /* SnapshotAppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel/SnapshotAppModel.swift; sourceTree = "<group>"; };
+		504EC3221FED79650016851F /* SnapshotComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components/SnapshotComponents.swift; sourceTree = "<group>"; };
+		504EC3231FED79650016851F /* SnapshotConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Configuration/SnapshotConfig.swift; sourceTree = "<group>"; };
+		504EC3241FED79650016851F /* ImagePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Helpers/ImagePicker.swift; sourceTree = "<group>"; };
+		504EC3251FED79650016851F /* SnapshotModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/SnapshotModels.swift; sourceTree = "<group>"; };
+		504EC3261FED79650016851F /* SnapshotViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/SnapshotViews.swift; sourceTree = "<group>"; };
 		504EC30E1FED79650016851F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		504EC3111FED79650016851F /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		504EC3131FED79650016851F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -53,6 +67,13 @@
 			children = (
 				50A91A5B2EED000100000001 /* App.entitlements */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
+				504EC3201FED79650016851F /* SnapshotAPIClient.swift */,
+				504EC3211FED79650016851F /* SnapshotAppModel.swift */,
+				504EC3221FED79650016851F /* SnapshotComponents.swift */,
+				504EC3231FED79650016851F /* SnapshotConfig.swift */,
+				504EC3241FED79650016851F /* ImagePicker.swift */,
+				504EC3251FED79650016851F /* SnapshotModels.swift */,
+				504EC3261FED79650016851F /* SnapshotViews.swift */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
 				504EC3101FED79650016851F /* LaunchScreen.storyboard */,
 				504EC3131FED79650016851F /* Info.plist */,
@@ -134,6 +155,13 @@
 			buildActionMask = 2147483647;
 			files = (
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
+				504EC3191FED79650016851F /* SnapshotAPIClient.swift in Sources */,
+				504EC31A1FED79650016851F /* SnapshotAppModel.swift in Sources */,
+				504EC31B1FED79650016851F /* SnapshotComponents.swift in Sources */,
+				504EC31C1FED79650016851F /* SnapshotConfig.swift in Sources */,
+				504EC31D1FED79650016851F /* ImagePicker.swift in Sources */,
+				504EC31E1FED79650016851F /* SnapshotModels.swift in Sources */,
+				504EC31F1FED79650016851F /* SnapshotViews.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
