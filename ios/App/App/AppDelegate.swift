@@ -150,12 +150,15 @@ private struct HistoryResponseItem: Decodable {
 
 enum APIError: LocalizedError {
     case invalidResponse
+    case unauthorized
     case server(String)
 
     var errorDescription: String? {
         switch self {
         case .invalidResponse:
             return "The server returned an invalid response."
+        case .unauthorized:
+            return "Your session expired. Please sign in again."
         case .server(let message):
             return message
         }
@@ -265,6 +268,13 @@ struct APIClient {
         }
     }
 
+    func deleteHistory(session: SessionState, id: Int) async throws {
+        var request = authorizedRequest(path: "api/history?id=\(id)", session: session)
+        request.httpMethod = "DELETE"
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try validate(response: response, data: data)
+    }
+
     private func authorizedRequest(path: String, session: SessionState) -> URLRequest {
         var request = URLRequest(url: baseURL.appendingPathComponent(path))
         request.setValue("Bearer \(session.token)", forHTTPHeaderField: "Authorization")
@@ -277,6 +287,9 @@ struct APIClient {
         }
 
         guard (200..<300).contains(httpResponse.statusCode) else {
+            if httpResponse.statusCode == 401 {
+                throw APIError.unauthorized
+            }
             if let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let message = payload["error"] as? String {
                 throw APIError.server(message)
@@ -365,6 +378,19 @@ final class SnapshotAppModel: ObservableObject {
         }
     }
 
+    func deleteHistoryCard(_ card: HistoryCard) {
+        guard let session else { return }
+        Task {
+            do {
+                try await apiClient.deleteHistory(session: session, id: card.id)
+                history.removeAll { $0.id == card.id }
+                statusMessage = "Deleted one study card from history."
+            } catch {
+                handle(error)
+            }
+        }
+    }
+
     private func restoreSession() {
         guard let data = UserDefaults.standard.data(forKey: sessionStorageKey),
               let session = try? JSONDecoder().decode(SessionState.self, from: data) else {
@@ -394,7 +420,7 @@ final class SnapshotAppModel: ObservableObject {
             statusMessage = "Signed in as \(session.user.email). Native API session is ready."
             await loadHistory(session: session)
         } catch {
-            errorMessage = error.localizedDescription
+            handle(error)
         }
     }
 
@@ -427,7 +453,7 @@ final class SnapshotAppModel: ObservableObject {
             statusMessage = "Study card saved to history."
             await loadHistory(session: session)
         } catch {
-            errorMessage = error.localizedDescription
+            handle(error)
         }
     }
 
@@ -435,8 +461,16 @@ final class SnapshotAppModel: ObservableObject {
         do {
             history = try await apiClient.fetchHistory(session: session)
         } catch {
-            errorMessage = error.localizedDescription
+            handle(error)
         }
+    }
+
+    private func handle(_ error: Error) {
+        if case APIError.unauthorized = error {
+            signOut()
+        }
+
+        errorMessage = error.localizedDescription
     }
 }
 
@@ -577,6 +611,7 @@ struct HomeScreen: View {
 
 struct HistoryScreen: View {
     @EnvironmentObject private var model: SnapshotAppModel
+    @State private var selectedCard: HistoryCard?
 
     var body: some View {
         NavigationView {
@@ -605,6 +640,17 @@ struct HistoryScreen: View {
                                     .foregroundStyle(.tertiary)
                             }
                             .padding(.vertical, 4)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                selectedCard = card
+                            }
+                            .swipeActions {
+                                Button(role: .destructive) {
+                                    model.deleteHistoryCard(card)
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
                         }
                     }
                 }
@@ -612,7 +658,45 @@ struct HistoryScreen: View {
             .refreshable {
                 model.refreshHistory()
             }
+            .sheet(item: $selectedCard) { card in
+                HistoryDetailScreen(card: card)
+            }
             .navigationTitle("History")
+        }
+        .navigationViewStyle(.stack)
+    }
+}
+
+struct HistoryDetailScreen: View {
+    let card: HistoryCard
+
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    StudyCardView(
+                        title: "Saved Card",
+                        heading: card.title,
+                        phonetic: card.phonetic,
+                        meaning: card.meaning,
+                        example: card.example
+                    )
+
+                    if let imageURL = card.imageURL, !imageURL.isEmpty {
+                        Link(destination: URL(string: imageURL)!) {
+                            Label("Open saved image", systemImage: "photo")
+                                .font(.headline)
+                        }
+                    }
+
+                    Text(card.createdAt.formatted(date: .complete, time: .shortened))
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(20)
+            }
+            .background(Color(uiColor: .systemGroupedBackground))
+            .navigationTitle("History Detail")
         }
         .navigationViewStyle(.stack)
     }

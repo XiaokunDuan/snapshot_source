@@ -16,6 +16,7 @@ interface AppleIdentityClaims {
 }
 
 interface AppleJwk extends JsonWebKey {
+  [key: string]: unknown;
   kty: string;
   kid: string;
   use: string;
@@ -81,7 +82,7 @@ export async function verifyAppleIdentityToken(identityToken: string) {
     throw new Error('Unable to find matching Apple signing key');
   }
 
-  const publicKey = createPublicKey({ key: jwk as any, format: 'jwk' });
+  const publicKey = createPublicKey({ key: jwk, format: 'jwk' });
   const signedData = Buffer.from(`${encodedHeader}.${encodedPayload}`);
   const signature = base64UrlDecode(encodedSignature);
   const isValid = verify('RSA-SHA256', signedData, publicKey, signature);
