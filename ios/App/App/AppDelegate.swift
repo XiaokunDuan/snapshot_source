@@ -861,22 +861,80 @@ struct HistoryDetailScreen: View {
 
 struct TrainScreen: View {
     @EnvironmentObject private var model: SnapshotAppModel
+    @State private var deck: [HistoryCard] = []
     @State private var currentIndex = 0
+    @State private var revealAnswer = false
+    @State private var masteredCount = 0
+    @State private var reviewAgainCount = 0
 
     var body: some View {
         NavigationView {
-            VStack(alignment: .leading, spacing: 20) {
-                Text("Flashcard Training")
-                    .font(.largeTitle.bold())
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    Text("Flashcard Training")
+                        .font(.largeTitle.bold())
 
-                if model.history.isEmpty {
-                    FeatureBlock(
-                        title: "No cards yet",
-                        subtitle: "The training deck will become meaningful once the native analyze flow starts saving history.",
-                        systemImage: "rectangle.stack.badge.plus"
-                    )
-                } else {
-                    let card = model.history[min(currentIndex, max(model.history.count - 1, 0))]
+                    if model.history.isEmpty {
+                        FeatureBlock(
+                            title: "No cards yet",
+                            subtitle: "The training deck becomes useful after the native analyze flow saves a few cards to history.",
+                            systemImage: "rectangle.stack.badge.plus"
+                        )
+                    } else {
+                        progressSummary
+                        trainingCard
+                        trainingActions
+                    }
+                }
+                .padding(20)
+            }
+            .background(Color(uiColor: .systemGroupedBackground))
+            .navigationTitle("Train")
+        }
+        .navigationViewStyle(.stack)
+        .onAppear {
+            rebuildDeckIfNeeded()
+        }
+        .onChange(of: model.history.count) { _ in
+            rebuildDeck(resetStats: true)
+        }
+    }
+
+    private var currentCard: HistoryCard? {
+        guard !deck.isEmpty, currentIndex < deck.count else {
+            return nil
+        }
+
+        return deck[currentIndex]
+    }
+
+    private var progressSummary: some View {
+        let remaining = max(deck.count - currentIndex, 0)
+
+        return VStack(alignment: .leading, spacing: 12) {
+            FeatureBlock(
+                title: "Round Progress",
+                subtitle: "\(currentIndex + (currentCard == nil ? 0 : 1)) / \(max(deck.count, 1)) cards in this session",
+                systemImage: "chart.bar.doc.horizontal"
+            )
+
+            HStack(spacing: 12) {
+                MetricPill(title: "Mastered", value: "\(masteredCount)", tint: Color(red: 0.18, green: 0.53, blue: 0.31))
+                MetricPill(title: "Review Again", value: "\(reviewAgainCount)", tint: Color(red: 0.78, green: 0.39, blue: 0.12))
+                MetricPill(title: "Remaining", value: "\(remaining)", tint: Color(red: 0.12, green: 0.36, blue: 0.62))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var trainingCard: some View {
+        if let card = currentCard {
+            VStack(alignment: .leading, spacing: 14) {
+                Text(revealAnswer ? "Answer" : "Prompt")
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+
+                if revealAnswer {
                     StudyCardView(
                         title: "Review",
                         heading: card.title,
@@ -885,19 +943,97 @@ struct TrainScreen: View {
                         example: card.example
                     )
 
-                    Button("Next Card") {
-                        currentIndex = (currentIndex + 1) % model.history.count
+                    if !card.exampleTranslation.isEmpty {
+                        FeatureBlock(
+                            title: "Translation",
+                            subtitle: card.exampleTranslation,
+                            systemImage: "character.book.closed"
+                        )
                     }
-                    .buttonStyle(PrimaryButtonStyle())
+                } else {
+                    StudyCardView(
+                        title: "Guess the word",
+                        heading: card.sourceObject,
+                        phonetic: "",
+                        meaning: card.sourceLabelEn,
+                        example: "Try to recall the saved vocabulary card before revealing the answer."
+                    )
                 }
-
-                Spacer()
             }
-            .padding(20)
-            .background(Color(uiColor: .systemGroupedBackground))
-            .navigationTitle("Train")
+        } else {
+            FeatureBlock(
+                title: "Round Complete",
+                subtitle: "You reached the end of the current deck. Restart to train on the latest saved history again.",
+                systemImage: "checkmark.seal"
+            )
         }
-        .navigationViewStyle(.stack)
+    }
+
+    private var trainingActions: some View {
+        VStack(spacing: 12) {
+            if currentCard != nil {
+                Button(revealAnswer ? "Hide Answer" : "Reveal Answer") {
+                    revealAnswer.toggle()
+                }
+                .buttonStyle(SecondaryButtonStyle())
+
+                if revealAnswer {
+                    HStack(spacing: 12) {
+                        Button("Review Again") {
+                            advance(markedAsMastered: false)
+                        }
+                        .buttonStyle(SecondaryButtonStyle())
+
+                        Button("Mastered") {
+                            advance(markedAsMastered: true)
+                        }
+                        .buttonStyle(PrimaryButtonStyle())
+                    }
+                } else {
+                    Button("Skip for Now") {
+                        advance(markedAsMastered: false)
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                }
+            }
+
+            Button(deck.isEmpty ? "Start Training" : "Restart Round") {
+                rebuildDeck(resetStats: true)
+            }
+            .buttonStyle(SecondaryButtonStyle())
+        }
+    }
+
+    private func advance(markedAsMastered: Bool) {
+        if markedAsMastered {
+            masteredCount += 1
+        } else {
+            reviewAgainCount += 1
+        }
+
+        revealAnswer = false
+
+        if currentIndex + 1 < deck.count {
+            currentIndex += 1
+        } else {
+            currentIndex = deck.count
+        }
+    }
+
+    private func rebuildDeckIfNeeded() {
+        if deck.isEmpty && !model.history.isEmpty {
+            rebuildDeck(resetStats: true)
+        }
+    }
+
+    private func rebuildDeck(resetStats: Bool) {
+        deck = model.history.shuffled()
+        currentIndex = 0
+        revealAnswer = false
+        if resetStats {
+            masteredCount = 0
+            reviewAgainCount = 0
+        }
     }
 }
 
@@ -1009,6 +1145,30 @@ struct FeatureBlock: View {
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(Color.white)
+        )
+    }
+}
+
+struct MetricPill: View {
+    let title: String
+    let value: String
+    let tint: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.headline)
+                .foregroundStyle(.primary)
+        }
+        .padding(.vertical, 12)
+        .padding(.horizontal, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(tint.opacity(0.14))
         )
     }
 }
