@@ -180,7 +180,6 @@ struct APIClient {
 
         let decoder = JSONDecoder()
         let items = try decoder.decode([HistoryResponseItem].self, from: data)
-        let formatter = ISO8601DateFormatter()
         return items.map { item in
             HistoryCard(
                 id: item.id,
@@ -192,20 +191,53 @@ struct APIClient {
                 imageURL: item.imageURL,
                 sourceObject: item.sourceObject ?? item.word,
                 sourceLabelEn: item.sourceLabelEn ?? item.word,
-                createdAt: formatter.date(from: item.createdAt) ?? Date()
+                createdAt: parseDate(item.createdAt) ?? Date()
             )
         }
     }
 
+    func fetchNativeBootstrap(session: SessionState, historyLimit: Int = 5) async throws -> NativeBootstrapPayload {
+        let request = authorizedRequest(
+            path: "api/native/bootstrap",
+            session: session,
+            queryItems: [URLQueryItem(name: "historyLimit", value: String(historyLimit))]
+        )
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try validate(response: response, data: data)
+
+        return try JSONDecoder().decode(NativeBootstrapPayload.self, from: data)
+    }
+
+    func fetchNativeTrainingFeed(session: SessionState, limit: Int = 12) async throws -> NativeTrainingFeedPayload {
+        let request = authorizedRequest(
+            path: "api/native/training-feed",
+            session: session,
+            queryItems: [URLQueryItem(name: "limit", value: String(limit))]
+        )
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try validate(response: response, data: data)
+
+        return try JSONDecoder().decode(NativeTrainingFeedPayload.self, from: data)
+    }
+
     func deleteHistory(session: SessionState, id: Int) async throws {
-        var request = authorizedRequest(path: "api/history?id=\(id)", session: session)
+        var request = authorizedRequest(
+            path: "api/history",
+            session: session,
+            queryItems: [URLQueryItem(name: "id", value: String(id))]
+        )
         request.httpMethod = "DELETE"
         let (data, response) = try await URLSession.shared.data(for: request)
         try validate(response: response, data: data)
     }
 
-    private func authorizedRequest(path: String, session: SessionState) -> URLRequest {
-        var request = URLRequest(url: baseURL.appendingPathComponent(path))
+    private func authorizedRequest(path: String, session: SessionState, queryItems: [URLQueryItem] = []) -> URLRequest {
+        var components = URLComponents(url: baseURL.appendingPathComponent(path), resolvingAgainstBaseURL: false)
+        if !queryItems.isEmpty {
+            components?.queryItems = queryItems
+        }
+
+        var request = URLRequest(url: components?.url ?? baseURL.appendingPathComponent(path))
         request.setValue("Bearer \(session.token)", forHTTPHeaderField: "Authorization")
         return request
     }
@@ -226,5 +258,20 @@ struct APIClient {
 
             throw APIError.server("Request failed with status \(httpResponse.statusCode)")
         }
+    }
+
+    private func parseDate(_ value: String?) -> Date? {
+        guard let value else {
+            return nil
+        }
+
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = formatter.date(from: value) {
+            return date
+        }
+
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.date(from: value)
     }
 }

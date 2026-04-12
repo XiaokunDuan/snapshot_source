@@ -208,14 +208,30 @@ struct HistoryScreen: View {
                 } else {
                     Section {
                         FeatureBlock(
-                            title: model.isRefreshingHistory ? "Refreshing History" : "History Synced",
-                            subtitle: model.isRefreshingHistory ? "Pulling the latest saved cards from your backend." : model.lastHistorySyncDescription,
+                            title: model.isRefreshingHistory ? "Refreshing History" : (model.isHistoryPreview ? "Recent Preview" : "Full Archive"),
+                            subtitle: model.historySummaryLabel,
                             systemImage: model.isRefreshingHistory ? "arrow.triangle.2.circlepath" : "checkmark.arrow.trianglehead.clockwise"
                         )
                         .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
                     }
 
-                    Section("Archived Cards") {
+                    Section {
+                        Text(model.lastHistorySyncDescription)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if model.isHistoryPreview && model.historyTotalCount > model.history.count {
+                        Section {
+                            Button(model.historyActionLabel) {
+                                model.refreshHistory()
+                            }
+                            .buttonStyle(SecondaryButtonStyle())
+                            .disabled(model.isRefreshingHistory)
+                        }
+                    }
+
+                    Section(model.isHistoryPreview ? "Recent Preview" : "Archived Cards") {
                         ForEach(model.history) { card in
                             HStack(alignment: .top, spacing: 14) {
                                 HistoryThumbnail(imageURL: card.imageURL)
@@ -343,7 +359,7 @@ struct HistoryDetailScreen: View {
 
 struct TrainScreen: View {
     @EnvironmentObject private var model: SnapshotAppModel
-    @State private var deck: [HistoryCard] = []
+    @State private var deck: [NativeTrainingCard] = []
     @State private var currentIndex = 0
     @State private var revealAnswer = false
     @State private var masteredCount = 0
@@ -356,13 +372,37 @@ struct TrainScreen: View {
                     Text("Flashcard Training")
                         .font(.largeTitle.bold())
 
-                    if model.history.isEmpty {
-                        FeatureBlock(
-                            title: "No cards yet",
-                            subtitle: "The training deck becomes useful after the native analyze flow saves a few cards to history.",
-                            systemImage: "rectangle.stack.badge.plus"
-                        )
+                    if model.trainingCards.isEmpty {
+                        if model.isRefreshingTrainingDeck {
+                            FeatureBlock(
+                                title: "Loading Training Deck",
+                                subtitle: model.lastTrainingSyncDescription,
+                                systemImage: "arrow.triangle.2.circlepath"
+                            )
+                            .overlay(alignment: .trailing) {
+                                ProgressView()
+                                    .padding(.trailing, 18)
+                            }
+                        } else {
+                            FeatureBlock(
+                                title: "No training cards yet",
+                                subtitle: "The training deck comes from the compact native feed instead of the full history payload.",
+                                systemImage: "rectangle.stack.badge.plus"
+                            )
+
+                            if model.isSignedIn {
+                                Button("Load Training Deck") {
+                                    model.refreshTrainingDeck()
+                                }
+                                .buttonStyle(SecondaryButtonStyle())
+                            }
+                        }
                     } else {
+                        FeatureBlock(
+                            title: model.isRefreshingTrainingDeck ? "Refreshing Training Feed" : "Training Deck Ready",
+                            subtitle: model.lastTrainingSyncDescription,
+                            systemImage: model.isRefreshingTrainingDeck ? "arrow.triangle.2.circlepath" : "rectangle.stack.badge.play"
+                        )
                         progressSummary
                         trainingCard
                         trainingActions
@@ -375,14 +415,17 @@ struct TrainScreen: View {
         }
         .navigationViewStyle(.stack)
         .onAppear {
+            if model.trainingCards.isEmpty && !model.isRefreshingTrainingDeck {
+                model.refreshTrainingDeck()
+            }
             rebuildDeckIfNeeded()
         }
-        .onChange(of: model.history.count) { _ in
+        .onChange(of: model.trainingCards.count) { _ in
             rebuildDeck(resetStats: true)
         }
     }
 
-    private var currentCard: HistoryCard? {
+    private var currentCard: NativeTrainingCard? {
         guard !deck.isEmpty, currentIndex < deck.count else {
             return nil
         }
@@ -419,26 +462,26 @@ struct TrainScreen: View {
                 if revealAnswer {
                     StudyCardView(
                         title: "Review",
-                        heading: card.title,
-                        phonetic: card.phonetic,
-                        meaning: card.meaning,
-                        example: card.example
+                        heading: card.word,
+                        phonetic: card.phonetic ?? "",
+                        meaning: card.answer,
+                        example: card.sentence ?? ""
                     )
 
-                    if !card.exampleTranslation.isEmpty {
+                    if let sentenceCn = card.sentenceCn, !sentenceCn.isEmpty {
                         FeatureBlock(
                             title: "Translation",
-                            subtitle: card.exampleTranslation,
+                            subtitle: sentenceCn,
                             systemImage: "character.book.closed"
                         )
                     }
                 } else {
                     StudyCardView(
                         title: "Guess the word",
-                        heading: card.sourceObject,
-                        phonetic: "",
-                        meaning: card.sourceLabelEn,
-                        example: "Try to recall the saved vocabulary card before revealing the answer."
+                        heading: card.prompt,
+                        phonetic: card.phonetic ?? "",
+                        meaning: card.sourceLabelEn ?? card.sourceObject ?? card.word,
+                        example: card.sentence ?? "Try to recall the saved vocabulary card before revealing the answer."
                     )
                 }
             }
@@ -480,7 +523,11 @@ struct TrainScreen: View {
             }
 
             Button(deck.isEmpty ? "Start Training" : "Restart Round") {
-                rebuildDeck(resetStats: true)
+                if deck.isEmpty {
+                    model.refreshTrainingDeck()
+                } else {
+                    rebuildDeck(resetStats: true)
+                }
             }
             .buttonStyle(SecondaryButtonStyle())
         }
@@ -503,13 +550,13 @@ struct TrainScreen: View {
     }
 
     private func rebuildDeckIfNeeded() {
-        if deck.isEmpty && !model.history.isEmpty {
+        if deck.isEmpty && !model.trainingCards.isEmpty {
             rebuildDeck(resetStats: true)
         }
     }
 
     private func rebuildDeck(resetStats: Bool) {
-        deck = model.history.shuffled()
+        deck = model.trainingCards.shuffled()
         currentIndex = 0
         revealAnswer = false
         if resetStats {
@@ -535,8 +582,14 @@ struct ProfileScreen: View {
 
                     FeatureBlock(
                         title: model.currentUsername,
-                        subtitle: model.subscriptionLabel,
+                        subtitle: model.accountSummaryLabel,
                         systemImage: "person.crop.circle.badge.checkmark"
+                    )
+
+                    FeatureBlock(
+                        title: "Billing",
+                        subtitle: model.subscriptionLabel,
+                        systemImage: "creditcard"
                     )
 
                     SignInWithAppleButton(.signIn) { request in
