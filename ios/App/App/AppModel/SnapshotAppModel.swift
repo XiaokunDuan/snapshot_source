@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import SwiftUI
 import UIKit
@@ -79,13 +80,26 @@ final class SnapshotAppModel: ObservableObject {
     @Published var isHistoryPreview = true
 
     let apiClient: APIClient
+    let storeKitRuntime: SnapshotStoreKitRuntime
     private let sessionStorageKey = "snapshot.session"
     private let bootstrapHistoryLimit = 5
     private let trainingFeedLimit = 12
+    private var cancellables = Set<AnyCancellable>()
 
     init(apiClient: APIClient = APIClient()) {
         self.apiClient = apiClient
+        self.storeKitRuntime = SnapshotStoreKitRuntime()
+
+        storeKitRuntime.objectWillChange
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
+
         restoreSession()
+        Task {
+            await storeKitRuntime.bootstrap()
+        }
     }
 
     var isSignedIn: Bool {
@@ -98,7 +112,7 @@ final class SnapshotAppModel: ObservableObject {
 
     var subscriptionLabel: String {
         guard let billingStatus else {
-            return "Billing snapshot has not loaded yet."
+            return storeKitRuntime.subscriptionSurfaceSubtitle
         }
 
         let sourceLabel: String

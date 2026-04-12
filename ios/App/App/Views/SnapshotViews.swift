@@ -591,6 +591,7 @@ struct ProfileScreen: View {
                         subtitle: model.subscriptionLabel,
                         systemImage: "creditcard"
                     )
+                    StoreKitRuntimePanel(runtime: model.storeKitRuntime)
 
                     SignInWithAppleButton(.signIn) { request in
                         request.requestedScopes = [.fullName, .email]
