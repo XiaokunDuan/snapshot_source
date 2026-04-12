@@ -9,6 +9,13 @@ export interface BillingProviderDescriptor {
   supportsServerNotifications: boolean;
 }
 
+export interface BillingFoundationStatus {
+  provider: BillingProviderKind;
+  descriptor: BillingProviderDescriptor;
+  appStoreConfig: ReturnType<typeof getAppStoreBillingConfig>;
+  ready: boolean;
+}
+
 export const BILLING_PROVIDERS: Record<BillingProviderKind, BillingProviderDescriptor> = {
   stripe: {
     kind: 'stripe',
@@ -32,11 +39,13 @@ export function getBillingProviderDescriptor(kind: BillingProviderKind) {
   return BILLING_PROVIDERS[kind];
 }
 
-export function getBillingFoundationStatus() {
+export function getBillingFoundationStatus(): BillingFoundationStatus {
   const provider = getConfiguredBillingProvider();
+  const appStoreConfig = provider === 'app_store' ? getAppStoreBillingConfig() : null;
   return {
     provider,
     descriptor: BILLING_PROVIDERS[provider],
-    appStoreConfig: provider === 'app_store' ? getAppStoreBillingConfig() : null,
+    appStoreConfig,
+    ready: provider === 'stripe' || Boolean(appStoreConfig),
   };
 }
