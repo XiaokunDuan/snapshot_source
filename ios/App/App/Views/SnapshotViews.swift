@@ -539,6 +539,8 @@ struct ProfileScreen: View {
                         systemImage: "person.crop.circle.badge.checkmark"
                     )
 
+                    StoreKitRuntimePanel(runtime: model.storeKitRuntime)
+
                     SignInWithAppleButton(.signIn) { request in
                         request.requestedScopes = [.fullName, .email]
                     } onCompletion: { result in

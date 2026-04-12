@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import SwiftUI
 import UIKit
@@ -71,11 +72,24 @@ final class SnapshotAppModel: ObservableObject {
     @Published var lastHistorySyncDescription = "History has not been refreshed yet."
 
     let apiClient: APIClient
+    let storeKitRuntime: SnapshotStoreKitRuntime
     private let sessionStorageKey = "snapshot.session"
+    private var cancellables = Set<AnyCancellable>()
 
     init(apiClient: APIClient = APIClient()) {
         self.apiClient = apiClient
+        self.storeKitRuntime = SnapshotStoreKitRuntime()
+
+        storeKitRuntime.objectWillChange
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
+
         restoreSession()
+        Task {
+            await storeKitRuntime.bootstrap()
+        }
     }
 
     var isSignedIn: Bool {
@@ -87,7 +101,7 @@ final class SnapshotAppModel: ObservableObject {
     }
 
     var subscriptionLabel: String {
-        "StoreKit migration pending"
+        storeKitRuntime.subscriptionSurfaceSubtitle
     }
 
     var isBusy: Bool {
