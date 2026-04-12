@@ -1,11 +1,11 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import * as Sentry from '@sentry/nextjs';
 import { requireDbUser } from '@/lib/users';
 import { getBillingStatus } from '@/lib/billing';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const user = await requireDbUser();
+    const user = await requireDbUser(req);
     const billing = await getBillingStatus(user.id);
 
     return NextResponse.json({ billing });

@@ -1,28 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as Sentry from '@sentry/nextjs';
-import { auth, currentUser } from '@clerk/nextjs/server';
 import { getPool } from '@/lib/db';
 import { getBillingStatus } from '@/lib/billing';
-import { ensureDbUserFromClerkId, ensureUserScaffolding } from '@/lib/users';
+import { requireDbUser, ensureUserScaffolding } from '@/lib/users';
 
 export async function GET(_request: NextRequest) {
     try {
-        const authResult = await auth();
-        const userId = authResult.userId;
-
-        if (!userId) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
-        const user = await currentUser();
-        if (!user) {
-            return NextResponse.json({ error: 'User not found' }, { status: 404 });
-        }
-
+        const dbUser = await requireDbUser(_request);
         const client = await getPool().connect();
 
         try {
-            const dbUser = await ensureDbUserFromClerkId(userId, client);
             await ensureUserScaffolding(dbUser.id, client);
 
             return NextResponse.json({

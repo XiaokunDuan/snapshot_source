@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
-import { Pool } from '@neondatabase/serverless';
-
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+import { getPool } from '@/lib/db';
+import { requireDbUser } from '@/lib/users';
 
 // GET: Fetch words in a specific word book
 export async function GET(
@@ -10,33 +8,14 @@ export async function GET(
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const authResult = await auth();
-        const userId = authResult.userId;
-
-        if (!userId) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
+        const user = await requireDbUser(request);
         const { id } = await params;
-        const bookId = id;
-        const client = await pool.connect();
+        const client = await getPool().connect();
 
         try {
-            const userResult = await client.query(
-                'SELECT id FROM users WHERE clerk_user_id = $1',
-                [userId]
-            );
-
-            if (userResult.rows.length === 0) {
-                return NextResponse.json({ error: 'User not found' }, { status: 404 });
-            }
-
-            const dbUserId = userResult.rows[0].id;
-
-            // Verify ownership
             const bookCheck = await client.query(
                 'SELECT * FROM word_books WHERE id = $1 AND user_id = $2',
-                [bookId, dbUserId]
+                [id, user.id]
             );
 
             if (bookCheck.rows.length === 0) {
@@ -46,12 +25,11 @@ export async function GET(
                 );
             }
 
-            // Get all words in the book
             const words = await client.query(
                 `SELECT * FROM saved_words 
          WHERE word_book_id = $1 AND user_id = $2
          ORDER BY created_at DESC`,
-                [bookId, dbUserId]
+                [id, user.id]
             );
 
             return NextResponse.json({
@@ -66,8 +44,8 @@ export async function GET(
     } catch (error) {
         console.error('Get words error:', error);
         return NextResponse.json(
-            { error: 'Failed to fetch words' },
-            { status: 500 }
+            { error: error instanceof Error ? error.message : 'Failed to fetch words' },
+            { status: error instanceof Error && error.message === 'Unauthorized' ? 401 : 500 }
         );
     }
 }
@@ -78,15 +56,8 @@ export async function POST(
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const authResult = await auth();
-        const userId = authResult.userId;
-
-        if (!userId) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
+        const user = await requireDbUser(request);
         const { id } = await params;
-        const bookId = id;
         const { word, phonetic, meaning, sentence, sentence_cn, image_url } = await request.json();
 
         if (!word) {
@@ -96,24 +67,12 @@ export async function POST(
             );
         }
 
-        const client = await pool.connect();
+        const client = await getPool().connect();
 
         try {
-            const userResult = await client.query(
-                'SELECT id FROM users WHERE clerk_user_id = $1',
-                [userId]
-            );
-
-            if (userResult.rows.length === 0) {
-                return NextResponse.json({ error: 'User not found' }, { status: 404 });
-            }
-
-            const dbUserId = userResult.rows[0].id;
-
-            // Verify ownership
             const bookCheck = await client.query(
                 'SELECT * FROM word_books WHERE id = $1 AND user_id = $2',
-                [bookId, dbUserId]
+                [id, user.id]
             );
 
             if (bookCheck.rows.length === 0) {
@@ -123,11 +82,10 @@ export async function POST(
                 );
             }
 
-            // Check if word already exists in this book
             const existing = await client.query(
                 `SELECT * FROM saved_words 
          WHERE word_book_id = $1 AND user_id = $2 AND word = $3`,
-                [bookId, dbUserId, word]
+                [id, user.id, word]
             );
 
             if (existing.rows.length > 0) {
@@ -137,13 +95,12 @@ export async function POST(
                 );
             }
 
-            // Add word
             const newWord = await client.query(
                 `INSERT INTO saved_words 
          (user_id, word_book_id, word, phonetic, meaning, sentence, sentence_cn, image_url, mastery_level, created_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0, NOW())
          RETURNING *`,
-                [dbUserId, bookId, word, phonetic, meaning, sentence, sentence_cn, image_url]
+                [user.id, id, word, phonetic, meaning, sentence, sentence_cn, image_url]
             );
 
             return NextResponse.json({
@@ -158,8 +115,8 @@ export async function POST(
     } catch (error) {
         console.error('Add word error:', error);
         return NextResponse.json(
-            { error: 'Failed to add word' },
-            { status: 500 }
+            { error: error instanceof Error ? error.message : 'Failed to add word' },
+            { status: error instanceof Error && error.message === 'Unauthorized' ? 401 : 500 }
         );
     }
 }
@@ -170,15 +127,8 @@ export async function DELETE(
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const authResult = await auth();
-        const userId = authResult.userId;
-
-        if (!userId) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
+        const user = await requireDbUser(request);
         const { id } = await params;
-        const bookId = id;
         const { searchParams } = new URL(request.url);
         const wordId = searchParams.get('wordId');
 
@@ -189,25 +139,13 @@ export async function DELETE(
             );
         }
 
-        const client = await pool.connect();
+        const client = await getPool().connect();
 
         try {
-            const userResult = await client.query(
-                'SELECT id FROM users WHERE clerk_user_id = $1',
-                [userId]
-            );
-
-            if (userResult.rows.length === 0) {
-                return NextResponse.json({ error: 'User not found' }, { status: 404 });
-            }
-
-            const dbUserId = userResult.rows[0].id;
-
-            // Delete word
             await client.query(
                 `DELETE FROM saved_words 
          WHERE id = $1 AND word_book_id = $2 AND user_id = $3`,
-                [wordId, bookId, dbUserId]
+                [wordId, id, user.id]
             );
 
             return NextResponse.json({ success: true });
@@ -219,8 +157,8 @@ export async function DELETE(
     } catch (error) {
         console.error('Delete word error:', error);
         return NextResponse.json(
-            { error: 'Failed to delete word' },
-            { status: 500 }
+            { error: error instanceof Error ? error.message : 'Failed to delete word' },
+            { status: error instanceof Error && error.message === 'Unauthorized' ? 401 : 500 }
         );
     }
 }

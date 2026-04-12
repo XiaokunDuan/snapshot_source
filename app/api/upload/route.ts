@@ -8,7 +8,7 @@ import { trackServerEvent } from '@/lib/analytics';
 
 export async function POST(req: NextRequest) {
     try {
-        const user = await requireDbUser();
+        const user = await requireDbUser(req);
         const rateLimit = await enforceRateLimit({
             identifier: `user:${user.id}`,
             route: '/api/upload',

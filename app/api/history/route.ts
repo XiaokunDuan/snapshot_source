@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as Sentry from '@sentry/nextjs';
-import { auth } from '@clerk/nextjs/server';
 import {
     createHistoryRecord,
     deleteHistoryRecord,
@@ -8,26 +7,23 @@ import {
     updateHistoryRecord,
 } from '@/lib/history-store';
 import { historyCreateSchema, historyUpdateSchema, parseHistoryId } from '@/lib/history-validation';
-import { ensureDbUserFromClerkId } from '@/lib/users';
+import { requireDbUser } from '@/lib/users';
 
 export const runtime = 'nodejs';
 
-async function requireHistoryUser() {
-    const { userId } = await auth();
-
-    if (!userId) {
+async function requireHistoryUser(request: NextRequest) {
+    try {
+        const dbUser = await requireDbUser(request);
+        return { dbUserId: dbUser.id };
+    } catch {
         return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
     }
-
-    const dbUser = await ensureDbUserFromClerkId(userId);
-
-    return { dbUserId: dbUser.id };
 }
 
 // GET - 获取学习历史
-export async function GET() {
+export async function GET(req: NextRequest) {
     try {
-        const user = await requireHistoryUser();
+        const user = await requireHistoryUser(req);
         if (user.error) {
             return user.error;
         }
@@ -47,7 +43,7 @@ export async function GET() {
 // POST - 保存新单词
 export async function POST(req: NextRequest) {
     try {
-        const user = await requireHistoryUser();
+        const user = await requireHistoryUser(req);
         if (user.error) {
             return user.error;
         }
@@ -103,7 +99,7 @@ export async function DELETE(req: NextRequest) {
             );
         }
 
-        const user = await requireHistoryUser();
+        const user = await requireHistoryUser(req);
         if (user.error) {
             return user.error;
         }
@@ -126,7 +122,7 @@ export async function DELETE(req: NextRequest) {
 // PUT - 更新单词
 export async function PUT(req: NextRequest) {
     try {
-        const user = await requireHistoryUser();
+        const user = await requireHistoryUser(req);
         if (user.error) {
             return user.error;
         }

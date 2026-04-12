@@ -22,13 +22,17 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Snapshot needs camera access so users can capture study images directly in the native app.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Snapshot needs photo library access so users can import images into their study history.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Snapshot may save generated visuals and exports back to the photo library.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
-	<key>UIMainStoryboardFile</key>
-	<string>Main</string>
 	<key>UIRequiredDeviceCapabilities</key>
 	<array>
-		<string>armv7</string>
+		<string>arm64</string>
 	</array>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>

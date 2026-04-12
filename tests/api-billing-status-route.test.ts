@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { NextRequest } from 'next/server';
 
 const captureException = vi.fn();
 const requireDbUser = vi.fn();
@@ -27,7 +28,7 @@ describe('/api/billing/status', () => {
     getBillingStatus.mockResolvedValue({ subscriptionStatus: 'trialing', hasAccess: true, remaining: 99 });
 
     const { GET } = await import('../app/api/billing/status/route');
-    const response = await GET();
+    const response = await GET(new NextRequest('http://localhost/api/billing/status'));
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
@@ -39,7 +40,7 @@ describe('/api/billing/status', () => {
     requireDbUser.mockRejectedValue(new Error('Unauthorized'));
 
     const { GET } = await import('../app/api/billing/status/route');
-    const response = await GET();
+    const response = await GET(new NextRequest('http://localhost/api/billing/status'));
 
     expect(response.status).toBe(401);
     await expect(response.json()).resolves.toEqual({ error: 'Unauthorized' });

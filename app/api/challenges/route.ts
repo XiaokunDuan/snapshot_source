@@ -1,50 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
-import { Pool } from '@neondatabase/serverless';
-
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+import { getPool } from '@/lib/db';
+import { requireDbUser } from '@/lib/users';
 
 // GET: Fetch user's challenge data
 export async function GET(request: NextRequest) {
     try {
-        const authResult = await auth();
-        const userId = authResult.userId;
-
-        if (!userId) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
-        const client = await pool.connect();
+        const user = await requireDbUser(request);
+        const client = await getPool().connect();
 
         try {
-            // Get user from database
-            const userResult = await client.query(
-                'SELECT id FROM users WHERE clerk_user_id = $1',
-                [userId]
-            );
-
-            if (userResult.rows.length === 0) {
-                return NextResponse.json({ error: 'User not found' }, { status: 404 });
-            }
-
-            const dbUserId = userResult.rows[0].id;
-
-            // Get active challenge
             const challengeResult = await client.query(
                 `SELECT * FROM learning_challenges 
          WHERE user_id = $1 AND status = 'active' 
          ORDER BY started_at DESC LIMIT 1`,
-                [dbUserId]
+                [user.id]
             );
 
             if (challengeResult.rows.length === 0) {
-                // Create default challenge if none exists
                 const newChallenge = await client.query(
                     `INSERT INTO learning_challenges 
            (user_id, challenge_type, target_days, current_streak, max_streak, shield_cards, status, started_at)
            VALUES ($1, 'streak', 30, 0, 0, 0, 'active', NOW())
            RETURNING *`,
-                    [dbUserId]
+                    [user.id]
                 );
                 return NextResponse.json({ challenge: newChallenge.rows[0] });
             }
@@ -58,8 +36,8 @@ export async function GET(request: NextRequest) {
     } catch (error) {
         console.error('Get challenge error:', error);
         return NextResponse.json(
-            { error: 'Failed to fetch challenge data' },
-            { status: 500 }
+            { error: error instanceof Error ? error.message : 'Failed to fetch challenge data' },
+            { status: error instanceof Error && error.message === 'Unauthorized' ? 401 : 500 }
         );
     }
 }
@@ -67,36 +45,16 @@ export async function GET(request: NextRequest) {
 // PATCH: Update challenge progress (for check-in)
 export async function PATCH(request: NextRequest) {
     try {
-        const authResult = await auth();
-        const userId = authResult.userId;
-
-        if (!userId) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
+        const user = await requireDbUser(request);
         const { incrementStreak } = await request.json();
-
-        const client = await pool.connect();
+        const client = await getPool().connect();
 
         try {
-            // Get user
-            const userResult = await client.query(
-                'SELECT id FROM users WHERE clerk_user_id = $1',
-                [userId]
-            );
-
-            if (userResult.rows.length === 0) {
-                return NextResponse.json({ error: 'User not found' }, { status: 404 });
-            }
-
-            const dbUserId = userResult.rows[0].id;
-
-            // Get active challenge
             const challengeResult = await client.query(
                 `SELECT * FROM learning_challenges 
          WHERE user_id = $1 AND status = 'active' 
          ORDER BY started_at DESC LIMIT 1`,
-                [dbUserId]
+                [user.id]
             );
 
             if (challengeResult.rows.length === 0) {
@@ -132,8 +90,8 @@ export async function PATCH(request: NextRequest) {
     } catch (error) {
         console.error('Update challenge error:', error);
         return NextResponse.json(
-            { error: 'Failed to update challenge' },
-            { status: 500 }
+            { error: error instanceof Error ? error.message : 'Failed to update challenge' },
+            { status: error instanceof Error && error.message === 'Unauthorized' ? 401 : 500 }
         );
     }
 }

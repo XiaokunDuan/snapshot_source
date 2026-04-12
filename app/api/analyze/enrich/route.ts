@@ -19,7 +19,7 @@ const enrichSchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
-    const user = await requireDbUser();
+    const user = await requireDbUser(req);
     const identifier = `user:${user.id}:enrich`;
     const rateLimit = await enforceRateLimit({
       identifier,

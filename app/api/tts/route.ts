@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
   let language = 'unknown';
 
   try {
-    const user = await requireDbUser();
+    const user = await requireDbUser(req);
     userId = user.id;
 
     const rateLimit = await enforceRateLimit({

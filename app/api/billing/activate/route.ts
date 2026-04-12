@@ -11,7 +11,7 @@ const activateSchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
-    const user = await requireDbUser();
+    const user = await requireDbUser(req);
     const parsed = activateSchema.safeParse(await req.json());
 
     if (!parsed.success) {

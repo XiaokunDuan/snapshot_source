@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     let requestImageKind: 'data-url' | 'remote-url' | 'unknown' = 'unknown';
     let requestMimeType = 'unknown';
     try {
-        const user = await requireDbUser();
+        const user = await requireDbUser(req);
         userId = user.id;
         const identifier = `user:${user.id}`;
         const rateLimit = await enforceRateLimit({

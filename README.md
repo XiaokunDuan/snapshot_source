@@ -56,7 +56,7 @@ This makes the product useful in ordinary moments:
 - Generates multilingual study content for the detected concept
 - Saves results into language-specific libraries and history
 - Tracks usage, streaks, and subscription state
-- Supports a web-first flow with preserved mobile shell support through Capacitor
+- Supports a native iOS transition while the existing web stack is still being decomposed
 
 ## Demo
 
@@ -73,7 +73,7 @@ This makes the product useful in ordinary moments:
 - Tailwind CSS 4
 - Clerk auth flows
 - Framer Motion
-- Capacitor bridge for mobile packaging
+- Native iOS shell under `ios/`
 
 ### Backend
 
@@ -93,15 +93,14 @@ This makes the product useful in ordinary moments:
 ## Repository Layout
 
 ```text
-app/                    App Router pages, APIs, layout, PWA metadata
+app/                    Legacy App Router pages and APIs pending native migration
 components/             UI primitives and product surfaces
 hooks/                  Client hooks
 lib/                    services, billing, analytics, AI helpers, data access
 public/                 logos, preview assets, service worker
 scripts/                database setup and migration scripts
 tests/                  Vitest coverage for billing, routes, validation
-android/                Capacitor Android shell
-ios/                    Capacitor iOS shell
+ios/                    Native iOS shell in transition
 ```
 
 ## Quickstart
@@ -191,9 +190,6 @@ npm run lint
 npm run test
 npm run db:setup
 npm run db:migrate
-npm run mobile:sync
-npm run mobile:android
-npm run mobile:ios
 ```
 
 ## Quality Gates

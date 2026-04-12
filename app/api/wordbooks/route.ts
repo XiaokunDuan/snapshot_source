@@ -1,34 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
-import { Pool } from '@neondatabase/serverless';
-
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+import { getPool } from '@/lib/db';
+import { requireDbUser } from '@/lib/users';
 
 // GET: Fetch all word books for user
 export async function GET(request: NextRequest) {
     try {
-        const authResult = await auth();
-        const userId = authResult.userId;
-
-        if (!userId) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
-        const client = await pool.connect();
+        const user = await requireDbUser(request);
+        const client = await getPool().connect();
 
         try {
-            const userResult = await client.query(
-                'SELECT id FROM users WHERE clerk_user_id = $1',
-                [userId]
-            );
-
-            if (userResult.rows.length === 0) {
-                return NextResponse.json({ error: 'User not found' }, { status: 404 });
-            }
-
-            const dbUserId = userResult.rows[0].id;
-
-            // Get all word books with word count
             const wordBooks = await client.query(
                 `SELECT wb.*, 
                 COUNT(sw.id) as word_count
@@ -37,7 +17,7 @@ export async function GET(request: NextRequest) {
          WHERE wb.user_id = $1
          GROUP BY wb.id
          ORDER BY wb.is_default DESC, wb.created_at DESC`,
-                [dbUserId]
+                [user.id]
             );
 
             return NextResponse.json({
@@ -51,8 +31,8 @@ export async function GET(request: NextRequest) {
     } catch (error) {
         console.error('Get word books error:', error);
         return NextResponse.json(
-            { error: 'Failed to fetch word books' },
-            { status: 500 }
+            { error: error instanceof Error ? error.message : 'Failed to fetch word books' },
+            { status: error instanceof Error && error.message === 'Unauthorized' ? 401 : 500 }
         );
     }
 }
@@ -60,13 +40,7 @@ export async function GET(request: NextRequest) {
 // POST: Create new word book
 export async function POST(request: NextRequest) {
     try {
-        const authResult = await auth();
-        const userId = authResult.userId;
-
-        if (!userId) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
+        const user = await requireDbUser(request);
         const { name, description } = await request.json();
 
         if (!name || name.trim().length === 0) {
@@ -76,25 +50,14 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const client = await pool.connect();
+        const client = await getPool().connect();
 
         try {
-            const userResult = await client.query(
-                'SELECT id FROM users WHERE clerk_user_id = $1',
-                [userId]
-            );
-
-            if (userResult.rows.length === 0) {
-                return NextResponse.json({ error: 'User not found' }, { status: 404 });
-            }
-
-            const dbUserId = userResult.rows[0].id;
-
             const newWordBook = await client.query(
                 `INSERT INTO word_books (user_id, name, description, is_default, created_at)
          VALUES ($1, $2, $3, FALSE, NOW())
          RETURNING *`,
-                [dbUserId, name.trim(), description || '']
+                [user.id, name.trim(), description || '']
             );
 
             return NextResponse.json({
@@ -109,8 +72,8 @@ export async function POST(request: NextRequest) {
     } catch (error) {
         console.error('Create word book error:', error);
         return NextResponse.json(
-            { error: 'Failed to create word book' },
-            { status: 500 }
+            { error: error instanceof Error ? error.message : 'Failed to create word book' },
+            { status: error instanceof Error && error.message === 'Unauthorized' ? 401 : 500 }
         );
     }
 }
@@ -118,13 +81,7 @@ export async function POST(request: NextRequest) {
 // DELETE: Remove word book
 export async function DELETE(request: NextRequest) {
     try {
-        const authResult = await auth();
-        const userId = authResult.userId;
-
-        if (!userId) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
+        const user = await requireDbUser(request);
         const { searchParams } = new URL(request.url);
         const bookId = searchParams.get('id');
 
@@ -135,24 +92,12 @@ export async function DELETE(request: NextRequest) {
             );
         }
 
-        const client = await pool.connect();
+        const client = await getPool().connect();
 
         try {
-            const userResult = await client.query(
-                'SELECT id FROM users WHERE clerk_user_id = $1',
-                [userId]
-            );
-
-            if (userResult.rows.length === 0) {
-                return NextResponse.json({ error: 'User not found' }, { status: 404 });
-            }
-
-            const dbUserId = userResult.rows[0].id;
-
-            // Check if word book belongs to user and is not default
             const bookCheck = await client.query(
                 'SELECT * FROM word_books WHERE id = $1 AND user_id = $2',
-                [bookId, dbUserId]
+                [bookId, user.id]
             );
 
             if (bookCheck.rows.length === 0) {
@@ -169,7 +114,6 @@ export async function DELETE(request: NextRequest) {
                 );
             }
 
-            // Delete word book (cascade will remove saved words)
             await client.query(
                 'DELETE FROM word_books WHERE id = $1',
                 [bookId]
@@ -184,8 +128,8 @@ export async function DELETE(request: NextRequest) {
     } catch (error) {
         console.error('Delete word book error:', error);
         return NextResponse.json(
-            { error: 'Failed to delete word book' },
-            { status: 500 }
+            { error: error instanceof Error ? error.message : 'Failed to delete word book' },
+            { status: error instanceof Error && error.message === 'Unauthorized' ? 401 : 500 }
         );
     }
 }

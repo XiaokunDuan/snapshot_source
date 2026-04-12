@@ -1,12 +1,12 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import * as Sentry from '@sentry/nextjs';
 import { requireDbUser } from '@/lib/users';
 import { createBillingSetupIntent } from '@/lib/billing';
 import { trackServerEvent } from '@/lib/analytics';
 
-export async function POST() {
+export async function POST(req: NextRequest) {
   try {
-    const user = await requireDbUser();
+    const user = await requireDbUser(req);
     const checkout = await createBillingSetupIntent(user);
 
     await trackServerEvent('billing_checkout_started', {
