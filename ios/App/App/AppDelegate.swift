@@ -51,6 +51,7 @@ struct SessionUser: Codable {
 struct SessionState: Codable {
     let token: String
     let user: SessionUser
+    let expiresAt: TimeInterval
 }
 
 struct AnalyzeResponse: Codable {
@@ -127,6 +128,13 @@ struct HistoryCard: Identifiable, Codable {
 private struct AuthResponse: Decodable {
     let sessionToken: String
     let user: SessionUser
+    let sessionExpiresAt: TimeInterval
+
+    enum CodingKeys: String, CodingKey {
+        case sessionToken
+        case user
+        case sessionExpiresAt
+    }
 }
 
 private struct UploadResponse: Decodable {
@@ -256,7 +264,7 @@ struct APIClient {
         try validate(response: response, data: data)
 
         let decoded = try JSONDecoder().decode(AuthResponse.self, from: data)
-        return SessionState(token: decoded.sessionToken, user: decoded.user)
+        return SessionState(token: decoded.sessionToken, user: decoded.user, expiresAt: decoded.sessionExpiresAt)
     }
 
     func uploadImage(session: SessionState, imageData: Data, fileName: String) async throws -> String {
@@ -485,6 +493,12 @@ final class SnapshotAppModel: ObservableObject {
     private func restoreSession() {
         guard let data = UserDefaults.standard.data(forKey: sessionStorageKey),
               let session = try? JSONDecoder().decode(SessionState.self, from: data) else {
+            return
+        }
+
+        guard session.expiresAt > Date().timeIntervalSince1970 else {
+            UserDefaults.standard.removeObject(forKey: sessionStorageKey)
+            statusMessage = "Saved session expired. Sign in again to continue."
             return
         }
 

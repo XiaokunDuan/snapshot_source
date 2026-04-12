@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from 'crypto';
+import { getAppSessionSecret } from '@/lib/auth-config';
 
 export type AppSessionProvider = 'apple' | 'clerk';
 
@@ -12,13 +13,7 @@ export interface AppSessionClaims {
 }
 
 function getSessionSecret() {
-  const secret = process.env.APP_SESSION_SECRET;
-
-  if (!secret) {
-    throw new Error('APP_SESSION_SECRET not configured');
-  }
-
-  return secret;
+  return getAppSessionSecret();
 }
 
 function base64UrlEncode(input: Buffer | string) {
@@ -40,13 +35,21 @@ function sign(data: string) {
 }
 
 export function createAppSessionToken(claims: Omit<AppSessionClaims, 'exp'>, ttlSeconds = 60 * 60 * 24 * 30) {
+  return createAppSession(claims, ttlSeconds).token;
+}
+
+export function createAppSession(claims: Omit<AppSessionClaims, 'exp'>, ttlSeconds = 60 * 60 * 24 * 30) {
+  const exp = Math.floor(Date.now() / 1000) + ttlSeconds;
   const header = base64UrlEncode(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
   const payload = base64UrlEncode(JSON.stringify({
     ...claims,
-    exp: Math.floor(Date.now() / 1000) + ttlSeconds,
+    exp,
   } satisfies AppSessionClaims));
   const signature = sign(`${header}.${payload}`);
-  return `${header}.${payload}.${signature}`;
+  return {
+    token: `${header}.${payload}.${signature}`,
+    expiresAt: exp,
+  };
 }
 
 export function verifyAppSessionToken(token: string): AppSessionClaims | null {
