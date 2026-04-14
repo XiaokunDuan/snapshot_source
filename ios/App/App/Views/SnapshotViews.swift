@@ -71,7 +71,7 @@ struct HomeScreen: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Snapshot")
+            Text("Novory")
                 .font(.largeTitle.bold())
             Text("Native iPhone and iPad workflow for sign-in, upload, analysis, and history sync.")
                 .font(.body)

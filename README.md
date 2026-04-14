@@ -1,11 +1,11 @@
-# Snapshot
+# Novory
 
 <p align="center">
-  <img src="./public/logo-compact.png" alt="Snapshot icon" width="88" height="88" />
+  <img src="./public/logo-compact.png" alt="Novory icon" width="88" height="88" />
 </p>
 
 <p align="center">
-  <strong>Snapshot</strong> is an image-first language learning product.
+  <strong>Novory</strong> is an image-first language learning product.
   It turns a photo into a useful study unit: concept extraction, multilingual cards, learning history, and a native iOS/iPadOS workflow backed by a web API.
 </p>
 
@@ -33,11 +33,11 @@
   <img src="https://img.shields.io/badge/Gemini-111827?style=flat&logo=google-gemini&logoColor=8e75ff" alt="Gemini" />
 </p>
 
-## Why Snapshot
+## Why Novory
 
 Most language tools start with text.
 
-Snapshot starts where memory is usually stronger: an image from real life. You take or upload a photo, the system detects the core concept, expands it into learning material, and saves the result into a study flow that can be revisited later.
+Novory starts where memory is usually stronger: an image from real life. You take or upload a photo, the system detects the core concept, expands it into learning material, and saves the result into a study flow that can be revisited later.
 
 This makes the product useful in ordinary moments:
 
@@ -49,7 +49,7 @@ This makes the product useful in ordinary moments:
 ## Product Preview
 
 <p align="center">
-  <img src="./public/learning.png" alt="Snapshot learning screen" width="880" />
+  <img src="./public/learning.png" alt="Novory learning screen" width="880" />
 </p>
 
 ## What It Does
@@ -70,6 +70,23 @@ This makes the product useful in ordinary moments:
 
 - App Store prep notes and submission checklist: [`docs/app-store-prep.md`](./docs/app-store-prep.md)
 - Privacy and permission copy reference: [`docs/privacy-copy.md`](./docs/privacy-copy.md)
+
+## iOS CLI Config
+
+The iOS target now reads release-facing values from `ios/App/Config/*.xcconfig`.
+
+- Shared defaults: `ios/App/Config/App.shared.xcconfig`
+- Debug overrides: `ios/App/Config/App.debug.xcconfig`
+- Release overrides: `ios/App/Config/App.release.xcconfig`
+
+The fastest local CLI edits are now:
+
+- `PRODUCT_BUNDLE_IDENTIFIER`
+- `SNAPSHOT_API_BASE_URL`
+- `SNAPSHOT_STOREKIT_PRODUCT_ID_MONTHLY`
+- `SNAPSHOT_STOREKIT_PRODUCT_ID_YEARLY`
+- `SNAPSHOT_STOREKIT_PRIMARY_PRODUCT_ID`
+- `SNAPSHOT_STOREKIT_SUBSCRIPTION_GROUP_ID`
 - Release-oriented environment template: [`env.example`](./env.example)
 
 ## Architecture
@@ -222,7 +239,7 @@ npm run build
 
 ## Deployment
 
-Snapshot is deployed on Vercel for the web backend and distributed through Apple platforms for the native client.
+Novory is deployed on Vercel for the web backend and distributed through Apple platforms for the native client.
 
 1. Import the repository into Vercel.
 2. Add the same environment variables used locally.
